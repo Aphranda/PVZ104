@@ -111,7 +111,7 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
-        /// 使能并且，初始化
+        /// 使能并且，初始化--------------TODO：加入外部初始化参数，每个轴单独加入
         /// </summary>
         /// <returns></returns>
         public E_Result Init(Dimension dimension, bool servo, UInt32 ServoResetTimeDelay)

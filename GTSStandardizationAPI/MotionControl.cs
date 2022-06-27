@@ -131,6 +131,9 @@ namespace GTSStandardizationAPI
                 ax[i] = GetAxisPara(DevHandle, axisHandle[i], mp[i].Scale, mp[i].Smoth);
             }
 
+
+            // TODO 根据机械结构配置各轴参数
+
             return _Result(rtn == 0);
         }
 
