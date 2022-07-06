@@ -59,7 +59,7 @@ namespace GTSStandardizationAPI
         // 查询转动状态
         public E_Result GetStatus(Dimension dimension, out E_Turntable_Status status, out int alarmId);
         // 转动初始化
-        public E_Result Init(Dimension dimension, bool servo, UInt32 ServoResetTimeDelay);
+        public E_Result Init(Dimension dimension, UInt32 ServoResetTimeDelay = 5000);
         // 转动寻零
         public E_Result Home(Dimension dimension, double speed, double offset, int timeout = -1);
 
@@ -111,11 +111,22 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
-        /// 使能并且，初始化--------------TODO：加入外部初始化参数，每个轴单独加入
+        /// 初始化
         /// </summary>
+        /// <param name="dimension">维度</param>
+        /// <param name="servoResetTimeDelay">初始化时间</param>
         /// <returns></returns>
-        public E_Result Init(Dimension dimension, bool servo, UInt32 ServoResetTimeDelay)
+        public E_Result Init(Dimension dimension, UInt32 servoResetTimeDelay = 5000)
         {
+            int timeflag = 0;
+            motionControl.MotorIOControl(true, 0);
+            while (timeflag <= servoResetTimeDelay)
+            {
+                SpinWait.SpinUntil(() => false, 1000);
+                timeflag = timeflag + 1000;
+            }
+            motionControl.MotorIOControl(false, 0);
+
             motionControl.CardInitial();
             return motionControl.ServoEnable(dimension, true);
         }
@@ -123,8 +134,8 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 获取当前状态
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="status"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="status">状态</param>
         /// <param name="alarmId">[0000 0000 0000 0000 ] [驱动器报警，限位告警,超时告警，相对定位告警，绝对定位告警，原点回归告警，复位告警，使能告警, 未连接报警]</param>
         /// <returns></returns>
         public E_Result GetStatus(Dimension dimension, out E_Turntable_Status status, out int alarmId)
@@ -170,10 +181,10 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
-        /// 获取当前角度值，需要脉冲转角度
+        /// 获取当前角度值
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="position"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="position">位置/角度</param>
         /// <returns></returns>
         public E_Result GetPosition(Dimension dimension, out double position)
         {
@@ -183,10 +194,10 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
-        /// 获取当前角速度，脉冲频率转角速度
+        /// 获取当前角速度
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="speed"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="speed">速度</param>
         /// <returns></returns>
         public E_Result GetSpeed(Dimension dimension, out double speed)
         {
@@ -198,64 +209,96 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 原点复位，带系统偏置
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="speed"></param>
-        /// <param name="timeout"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="speed">速度</param>
+        /// <param name="timeout">超时时间</param>
         /// <returns></returns>
         public E_Result Home(Dimension dimension, double speed, double offset, int timeout = -1)
         {
+            // 执行Home时，当前位置是不可靠的，所以使用最大行程440
+            int finalTimeout = CalculateTimeout(dimension, timeout, speed);
 
+            // 驱动轴原点复位
             E_Result e_Result = motionControl.MotorHome(dimension, speed, offset);
-            BlockingQuery(dimension, timeout);
+
+            // 轮询运动状态
+            BlockingQuery(dimension, finalTimeout);
             return e_Result;
         }
 
         /// <summary>
-        /// 驱动相对移动
+        /// 相对移动
         /// </summary>
         /// <param name="dimension">轴号</param>
         /// <param name="speed">速度</param>
         /// <param name="position">位置</param>
-        /// <param name="timeout"></param>
+        /// <param name="timeout">超时时间</param>
         /// <returns></returns>
         public E_Result MoveRelative(Dimension dimension, double speed, double position, int timeout = -1)
         {
+            // 计算内置超时时间
+            int finalTimeout = CalculateTimeout(dimension, timeout, speed, position);
+
+            // 驱动轴相对运动
             E_Result e_Result = motionControl.MotorRelative(dimension, speed, position);
-            BlockingQuery(dimension, timeout);
+
+            // 轮询运动状态
+            BlockingQuery(dimension, finalTimeout);
             return e_Result;
         }
 
         /// <summary>
-        /// 驱动绝对移动
+        /// 绝对移动
         /// </summary>
         /// <param name="dimension">轴号</param>
         /// <param name="speed">速度</param>
         /// <param name="position">位置</param>
-        /// <param name="timeout"></param>
+        /// <param name="timeout">超时时间</param>
         /// <returns></returns>
         public E_Result MoveAbsolute(Dimension dimension, double speed, double position, int timeout = -1)
         {
+            // 计算内置超时时间
+            double currentPosition = 0;
+            GetPosition(dimension, out currentPosition);
+            double movePosition = Math.Abs(currentPosition - position);
+            int finalTimeout = CalculateTimeout(dimension, timeout, speed, movePosition);
+
+            // 驱动轴绝对运动
             E_Result e_Result = motionControl.MotorAbsolute(dimension, speed, position);
-            BlockingQuery(dimension, timeout);
+
+            // 轮询运动状态
+            BlockingQuery(dimension, finalTimeout);
             return e_Result;
         }
 
         /// <summary>
         /// JOG
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="speed"></param>
-        /// <param name="direction"></param>
-        /// <param name="timeout"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="speed">速度</param>
+        /// <param name="direction">方向</param>
+        /// <param name="timeout">超时时间</param>
         /// <returns></returns>
         public E_Result Jog(Dimension dimension, double speed, bool direction, int timeout = -1)
         {
+            // 驱动轴以速度模式运行
             E_Result e_Result = motionControl.MotorJog(dimension, speed, direction);
+
+            // 轮询运动状态
             BlockingQuery(dimension, timeout);
             return E_Result.E_SUCCESS;
         }
 
-
+        /// <summary>
+        /// 开始连续触发
+        /// </summary>
+        /// <param name="dimension">维度</param>
+        /// <param name="start">开始位置</param>
+        /// <param name="stop">停止位置</param>
+        /// <param name="step">触发步长</param>
+        /// <param name="pulseWidth">脉冲宽度us</param>
+        /// <param name="timeout">超时时间</param>
+        /// <returns></returns>
         public E_Result Trigger(Dimension dimension, double start, double stop, double step, int pulseWidth, int timeout = -1)
         {
             // 设置连续触发参数
@@ -267,31 +310,44 @@ namespace GTSStandardizationAPI
             }
 
             // 设置连续脉冲数组
-            double pulseNum = (stop - start) / step; // 脉冲数量
+            int pulseNum = (int)((stop - start) / step); // 脉冲数量
 
-
-            double numFlag = pulseNum;
-            while (numFlag > 0)
+            if (pulseNum <= 128)
             {
-                if (pulseNum <= 128)
+                double[] posArray = new double[pulseNum * 2]; //256
+                for (int i = 0; i < pulseNum; i++)
                 {
-                    double[] posArray = new double[(int)pulseNum * 2];
-                    for (int i = 0; i < (int)pulseNum; i++)
-                    {
-                        posArray[2 * i] = start + i * step;
-                    }
-                    motionControl.MotorCompareHs2Data(dimension, posArray);
-                    break;
+                    posArray[2 * i] = start + i * step;
                 }
-                else
+
+                motionControl.MotorCompareHs2Data(dimension, posArray);
+            }
+            else if (pulseNum > 128)
+            {
+                int residualPulse = pulseNum;
+                double currentPosition = start;
+                while (currentPosition < stop)
                 {
-                    double[] posArray = new double[128];
-                    for (int i = 0; i < 128; i++)
+                    if (residualPulse >= 128)
                     {
-                        posArray[i] = start + i * step + (pulseNum - numFlag) * i;
+                        double[] posArray = new double[256]; //256
+                        for (int i = 0; i < 128; i++)
+                        {
+                            posArray[2 * i] = currentPosition + i * step;
+                        }
+                        motionControl.MotorCompareHs2Data(dimension, posArray);
                     }
-                    numFlag = numFlag - 128;
-                    motionControl.MotorCompareHs2Data(dimension, posArray);
+                    else if (residualPulse < 128)
+                    {
+                        double[] posArray = new double[residualPulse * 2]; //256
+                        for (int i = 0; i < residualPulse; i++)
+                        {
+                            posArray[2 * i] = currentPosition + i * step;
+                        }
+                        motionControl.MotorCompareHs2Data(dimension, posArray);
+                    }
+                    residualPulse = residualPulse - 128;
+                    currentPosition = currentPosition + 128 * step;
                 }
             }
 
@@ -319,9 +375,9 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
-        /// Stop
+        /// 运动停止
         /// </summary>
-        /// <param name="dimension"></param>
+        /// <param name="dimension">维度</param>
         /// <returns></returns>
         public E_Result Stop(Dimension dimension)
         {
@@ -329,6 +385,11 @@ namespace GTSStandardizationAPI
             return e_Result;
         }
 
+        /// <summary>
+        /// 连续触发停止
+        /// </summary>
+        /// <param name="dimension">维度</param>
+        /// <returns></returns>
         public E_Result TriggerStop(Dimension dimension)
         {
             E_Result e_Result = motionControl.MotorCompareHS2Stop();
@@ -338,28 +399,45 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 轮询阻塞查询
         /// </summary>
-        /// <param name="second"></param>
-        /// <param name="dimension"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="timeout">轮询延时</param>
         /// <returns></returns>
-        public E_Result BlockingQuery(Dimension dimension, int second)
+        public E_Result BlockingQuery(Dimension dimension, int timeout)
         {
-            int block_flag = 0;
-            while (second > block_flag)
+            int block_timeout = 0;
+            while (timeout > block_timeout)
             {
                 Axis axis = motionControl.MotorGetStatus(dimension);
                 bool result = false;
 
                 result = axis.IsRunning;
 
-                SpinWait.SpinUntil(() => !result, 1000); // 延时1S
+                SpinWait.SpinUntil(() => !result, 1000); // 延时1ms
                 if (!result)
                 {
                     return E_Result.E_SUCCESS;
                 }
-                block_flag++;
+                block_timeout = block_timeout + 1000;
             }
             return E_Result.E_TIMEOUT;
         }
 
+
+        /// <summary>
+        /// 自动计算延时
+        /// </summary>
+        /// <param name="dimension">转台维度</param>
+        /// <param name="inputTimeout">输入的时间</param>
+        /// <param name="speed">转台速度</param>
+        /// <param name="position">转台位置</param>
+        /// <returns></returns>
+        private int CalculateTimeout(Dimension dimension, int inputTimeout, double speed, double position = 440)
+        {
+            int timeout = 0;
+            // 内置计算每次执行运动操作时，Timeout的时间
+            timeout = (int)(position / speed + 10) * 1000;
+            // 输入Timeout与内置进行比较，输出较大值。
+            return Math.Max(timeout, inputTimeout);
+        }
     }
 }

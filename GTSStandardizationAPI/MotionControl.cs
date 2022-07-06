@@ -288,7 +288,7 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 停止原点复位
         /// </summary>
-        /// <param name="dimension"></param>
+        /// <param name="dimension">维度</param>
         /// <returns></returns>
         public E_Result MotorHomeStop(Dimension dimension)
         {
@@ -390,9 +390,9 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 单轴相对运动
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="speed"></param>
-        /// <param name="position"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="speed">运行速度</param>
+        /// <param name="position">运行位置</param>
         /// <returns></returns>
         public E_Result MotorRelative(Dimension dimension, double speed, double position)
         {
@@ -472,9 +472,9 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 单轴绝对运动
         /// </summary>
-        /// <param name="dimension"></param>
-        /// <param name="speed"></param>
-        /// <param name="position"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="speed">运行速度</param>
+        /// <param name="position">运行位置</param>
         /// <returns></returns>
         public E_Result MotorAbsolute(Dimension dimension, double speed, double position)
         {
@@ -580,7 +580,7 @@ namespace GTSStandardizationAPI
 
 
             rtn = CNMCLib20.NMC_Comp2DimensSetParamEx(DevHandle, group, ref comp2DimensParamEx, 0);
-            Debug.WriteLine(rtn);
+
             if (rtn != 0)
             {
                 // 二维位置比较参数设置错误
@@ -593,6 +593,7 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 高速二维位置比较数据设置
         /// </summary>
+        /// <param name="dimension">维度</param>
         /// <param name="posArray"> 目标数组</param>
         /// <returns></returns>
         public E_Result MotorCompareHs2Data(Dimension dimension, double[] posRangleArray)
@@ -604,7 +605,7 @@ namespace GTSStandardizationAPI
             {
                 posArray[i] = (int)(posRangleArray[i] * mp[currentAxis].Scale);
             }
-            Debug.WriteLine(posArray[0]);
+
             short rtn = 0;
             short group = 0;
             rtn = CNMCLib20.NMC_Comp2DimensSetData(DevHandle, group, posArray, (short)(posArray.Length / 2), 0);
@@ -621,6 +622,7 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 高速二维位置比较状态
         /// </summary>
+        /// <param name="compareStatus">比较参数</param>
         /// <returns></returns>
         public E_Result MotorCompareHS2Status(out CompareStatus compareStatus)
         {
@@ -669,9 +671,23 @@ namespace GTSStandardizationAPI
         }
 
         /// <summary>
+        /// IO控制
+        /// </summary>
+        /// <param name="Switch">开关</param>
+        /// <param name="index">IO位置</param>
+        /// <returns></returns>
+        public E_Result MotorIOControl(bool Switch, short index)
+        {
+            int level = Switch == true ? 0 : 1;
+            short rtn = 0;
+            rtn = CNMCLib20.NMC_SetDOBit(DevHandle, index, (short)level);
+            return _Result(rtn == 0);
+        }
+
+        /// <summary>
         /// 返回当前轴状态
         /// </summary>
-        /// <param name="dimension"></param>
+        /// <param name="dimension">维度</param>
         /// <returns></returns>
         public Axis MotorGetStatus(Dimension dimension)
         {
@@ -706,6 +722,8 @@ namespace GTSStandardizationAPI
         /// </summary>
         /// <param name="devhandle">设备句柄</param>
         /// <param name="axisHandle">轴句柄</param>
+        /// <param name="scale">轴当量</param>
+        /// <param name="somthtime">轴平滑系数</param>
         /// <returns>返回轴配置</returns>
         private Axis GetAxisPara(UInt16 devhandle, UInt16 axisHandle, double scale, double somthtime)
         {
@@ -873,7 +891,8 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 设置各轴参数
         /// </summary>
-        /// <param name="dimension"></param>
+        /// <param name="dimension">维度</param>
+        /// <param name="axisPara">单轴配置参数</param>
         /// <returns></returns>
         private short SetAxisPara(Dimension dimension, AxisPara axisPara)
         {
@@ -929,8 +948,7 @@ namespace GTSStandardizationAPI
         /// <summary>
         /// 获取单轴配置
         /// </summary>
-        /// <param name="axishandle"></param>
-        /// <param name="iniHelper"></param>
+        /// <param name="axishandle">单轴句柄</param>
         /// <returns></returns>
         private MotionPara GetMotionPara(ushort axishandle)
         {
