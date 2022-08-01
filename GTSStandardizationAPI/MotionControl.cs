@@ -45,7 +45,7 @@ namespace GTSStandardizationAPI
         /// 连接运动控制卡
         /// </summary>
         /// <returns>连接状态</returns>
-        public E_Result CardConnect()
+        public E_Result CardConnect(byte[] ipv4)
         {
             short rtn = 0;
             ushort devNum = 0; // 当前板卡可控轴数量
@@ -54,7 +54,11 @@ namespace GTSStandardizationAPI
             if (rtn == 0 && devNum > 0)
             {
                 // 打开控制器, 并获取全局句柄Devhandle
-                rtn = CNMCLib20.NMC_DevOpen(0, ref DevHandle);
+                rtn = CNMCLib20.NMC_DevOpenByIP(ipv4, ref DevHandle);
+                if (rtn != 0)
+                {
+                    rtn = CNMCLib20.NMC_DevOpen(0, ref DevHandle);
+                }
                 if (rtn != 0)
                 {
                     return _Result(rtn == 0);
@@ -133,7 +137,6 @@ namespace GTSStandardizationAPI
 
 
             // TODO 根据机械结构配置各轴参数
-
             return _Result(rtn == 0);
         }
 
@@ -607,8 +610,8 @@ namespace GTSStandardizationAPI
             }
 
             short rtn = 0;
-            short group = 0;
-            rtn = CNMCLib20.NMC_Comp2DimensSetData(DevHandle, group, posArray, (short)(posArray.Length / 2), 0);
+            short grounp = 0;
+            rtn = CNMCLib20.NMC_Comp2DimensSetData(DevHandle, grounp, posArray, (short)(posArray.Length / 2), 0);
             if (rtn != 0)
             {
 
@@ -666,7 +669,9 @@ namespace GTSStandardizationAPI
         {
             short rtn = 0;
             short grounp = 0;
+            int[] posArray = new int[0];
             rtn = CNMCLib20.NMC_Comp2DimensOnoff(DevHandle, grounp, Off, 0);
+            CNMCLib20.NMC_Comp2DimensSetData(DevHandle, grounp, posArray, (short)(posArray.Length / 2), 0);
             return _Result(rtn == 0);
         }
 

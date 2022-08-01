@@ -53,7 +53,7 @@ namespace GTSStandardizationAPI
     public interface GTSApi
     {
         // 转动连接
-        public E_Result Connect();
+        public E_Result Connect(byte[] ipv4);
         // 转动断开
         public E_Result Disconnect();
         // 查询转动状态
@@ -96,9 +96,9 @@ namespace GTSStandardizationAPI
         /// <param name="ipAddress"></param>
         /// <param name="port"></param>
         /// <returns></returns>
-        public E_Result Connect()
+        public E_Result Connect(byte[] ipv4)
         {
-            return motionControl.CardConnect();
+            return motionControl.CardConnect(ipv4);
         }
 
         /// <summary>
@@ -147,17 +147,17 @@ namespace GTSStandardizationAPI
             {
                 status = E_Turntable_Status.moving;
             }
-            if (axis.IsArrive == true)
+            if (axis.IsArrive)
             {
                 status = E_Turntable_Status.ready;
             }
-            if (axis.IsAlarming == true)
+            if (axis.IsAlarming)
             {
                 status = E_Turntable_Status.alarm;
             }
 
             // 连接状态判断
-            if (axis.IsConnected == true)
+            if (axis.IsConnected)
             {
                 alarmId = alarmId & -129; // 将连接状态置位
             }
@@ -167,7 +167,7 @@ namespace GTSStandardizationAPI
             }
 
             // 判断限位状态
-            if (axis.NegArrived == true || axis.PosArrived == true)
+            if (axis.NegArrived)
             {
                 alarmId = alarmId | 16384;
             }
@@ -175,6 +175,7 @@ namespace GTSStandardizationAPI
             {
                 alarmId = alarmId & -16385;
             }
+            
             // 获取IPV4地址
             ipv4 = motionControl.ipv4;
             return E_Result.E_SUCCESS;
@@ -412,7 +413,7 @@ namespace GTSStandardizationAPI
 
                 result = axis.IsRunning;
 
-                SpinWait.SpinUntil(() => !result, 1000); // 延时1ms
+                SpinWait.SpinUntil(() => !result, 1000); // 延时1s
                 if (!result)
                 {
                     return E_Result.E_SUCCESS;

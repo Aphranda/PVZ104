@@ -48,8 +48,8 @@ namespace GTSStandardizationAPI
         private double currentPos0;
         private double currentPos1;
         private double currentVel;
-        private bool isNeglmtDown = true;
-        private bool isPoslmtDown = true;
+        private bool isNeglmtDown = false;
+        private bool isPoslmtDown =true;
         private bool isSoftLmtActived = false;
         private double safePoslmtPos;
         private double safelNeglmtPos;
@@ -65,7 +65,7 @@ namespace GTSStandardizationAPI
         private double homeBackVel;
         private double homeOffset;
         private double homeAcc;
-        private bool isNegHome = true;
+        private bool isNegHome = false;
         private bool isHomeTwice = false;
         private bool isHomeZero = true;
         private bool isHomeUp = false;
@@ -282,7 +282,7 @@ namespace GTSStandardizationAPI
         private double jumpVel = 0.0;
         private double endVel = 0.0;
         private int mode = 0;
-        private double scale = 1000;
+        private double scale = 18000;
         private int zeroPos = 1;
         private double smoth = 100;
         private bool direction = true;
@@ -331,7 +331,7 @@ namespace GTSStandardizationAPI
         // 其他参数
         private Int32 posErr = 0;       // 最大误差设定
         private double smooth = 100;    // 平滑系数
-        private double scale = 1000;    // 轴当量，减速比单位转换使用
+        private double scale = 18000;    // 轴当量，减速比单位转换使用
 
         private double zeroPos = 0;     // 是否清零
 
