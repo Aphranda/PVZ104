@@ -137,6 +137,8 @@ namespace GTSStandardizationAPI
 
 
             // TODO 根据机械结构配置各轴参数
+            mp[0].Scale = 18000;
+            mp[1].Scale = 178714;
             return _Result(rtn == 0);
         }
 
@@ -214,7 +216,7 @@ namespace GTSStandardizationAPI
             HomePara homePara = new HomePara();
 
             // 实例化运动配置
-            mp[currentAxis] = GetMotionPara(AxisCurrentHandle);
+            // mp[currentAxis] = GetMotionPara(AxisCurrentHandle);
 
             // 实例化单轴配置
             ax[currentAxis].HomeMode = homePara.HomeMode;
@@ -330,7 +332,7 @@ namespace GTSStandardizationAPI
             currentAxis = (int)dimension;
 
             // 实例化运动配置
-            mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
+            // mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
 
             // 设置运动参数
             mp[currentAxis].Mode = 0;
@@ -406,7 +408,7 @@ namespace GTSStandardizationAPI
 
             // 相对运动
             // 获取当前轴配置
-            mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
+            // mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
 
             //设置运动参数
             mp[currentAxis].Mode = 1;
@@ -485,7 +487,7 @@ namespace GTSStandardizationAPI
             currentAxis = (int)dimension;
 
             // 获取当前轴配置
-            mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
+            // mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
 
             //设置运动参数
             mp[currentAxis].Mode = 2;

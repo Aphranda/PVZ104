@@ -119,14 +119,16 @@ namespace GTSStandardizationAPI
         public E_Result Init(Dimension dimension, UInt32 servoResetTimeDelay = 5000)
         {
             int timeflag = 0;
-            motionControl.MotorIOControl(true, 0);
+            motionControl.MotorIOControl(false, 0);
+            motionControl.MotorIOControl(false, 1);
             while (timeflag <= servoResetTimeDelay)
             {
-                SpinWait.SpinUntil(() => false, 1000);
+                SpinWait.SpinUntil(() => true, 1000);
                 timeflag = timeflag + 1000;
             }
-            motionControl.MotorIOControl(false, 0);
-
+            // motionControl.MotorIOControl(true, 0);
+            motionControl.MotorIOControl(true, 0);
+            motionControl.MotorIOControl(true, 1);
             motionControl.CardInitial();
             return motionControl.ServoEnable(dimension, true);
         }
@@ -175,7 +177,7 @@ namespace GTSStandardizationAPI
             {
                 alarmId = alarmId & -16385;
             }
-            
+
             // 获取IPV4地址
             ipv4 = motionControl.ipv4;
             return E_Result.E_SUCCESS;
