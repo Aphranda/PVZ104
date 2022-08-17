@@ -139,6 +139,14 @@ namespace GTSStandardizationAPI
             // TODO 根据机械结构配置各轴参数
             mp[0].Scale = 18000;
             mp[1].Scale = 178714;
+            ax[0].IsPoslmtDown = false;
+            ax[0].IsPoslmtDown = false;
+            ax[1].IsPoslmtDown = true;
+            ax[1].IsNeglmtDown = true;
+
+            AxisPara axisPara = new AxisPara();
+
+            SetAxisPara(Dimension.Axis02, axisPara);
             return _Result(rtn == 0);
         }
 
@@ -185,7 +193,7 @@ namespace GTSStandardizationAPI
             {
                 // 开启使能
                 rtn = CNMCLib20.NMC_MtSetSvOn(AxisCurrentHandle);
-
+                ClearError(dimension);
                 return _Result(rtn == 0);
             }
             else
@@ -194,6 +202,7 @@ namespace GTSStandardizationAPI
                 rtn = CNMCLib20.NMC_MtSetSvOff(AxisCurrentHandle);
                 return _Result(rtn == 0);
             }
+
         }
 
         /// <summary>
@@ -712,13 +721,21 @@ namespace GTSStandardizationAPI
             {
                 axis.IsAlarming = true;
             }
-            if (motionIObyte[2] == '0')
+            if (motionIObyte[2] == '1')
             {
                 axis.PosArrived = true;
             }
-            if (motionIObyte[3] == '0')
+            else
+            {
+                axis.PosArrived = false;
+            }
+            if (motionIObyte[3] == '1')
             {
                 axis.NegArrived = true;
+            }
+            else
+            {
+                axis.NegArrived = false;
             }
             return axis;
         }

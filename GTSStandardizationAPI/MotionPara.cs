@@ -49,7 +49,7 @@ namespace GTSStandardizationAPI
         private double currentPos1;
         private double currentVel;
         private bool isNeglmtDown = false;
-        private bool isPoslmtDown =true;
+        private bool isPoslmtDown = true;
         private bool isSoftLmtActived = false;
         private double safePoslmtPos;
         private double safelNeglmtPos;
@@ -65,7 +65,7 @@ namespace GTSStandardizationAPI
         private double homeBackVel;
         private double homeOffset;
         private double homeAcc;
-        private bool isNegHome = false;
+        private bool isNegHome = true;
         private bool isHomeTwice = false;
         private bool isHomeZero = true;
         private bool isHomeUp = false;
@@ -306,8 +306,8 @@ namespace GTSStandardizationAPI
     public class AxisPara
     {
         // 限位激活与电平 1:有效, 0:无效; 1:高电平, 0:低电平。
-        private short poslmt = 0;
-        private short neglmt = 0;
+        private short poslmt = 1;
+        private short neglmt = 1;
         private short alarmEnable = 0;
 
         private short poslmtlev = 1;
@@ -365,7 +365,7 @@ namespace GTSStandardizationAPI
     public class HomePara
     {
         private short homeMode = 3;             // 原点复位模式
-        private bool isNegHome = false;         // 是否反向回零
+        private bool isNegHome = true;         // 是否反向回零
         private double homeMaxPos = 360;        // 复位最大距离
         private double serchHomeVel = 10;       // 搜索速度
         private double homeAcc = 1000;          // 搜索加速度
@@ -375,7 +375,7 @@ namespace GTSStandardizationAPI
         private double homeOffsetLmt = 0;       // 反向运动离开开关距离
         private bool isHomeTwice = false;       // 是否二次回零
         private bool isZUp = true;              // Z上升沿触发
-        private bool isHomeUp = false;          // 原点输入上升沿触发
+        private bool isHomeUp = true;          // 原点输入上升沿触发
         private bool isLmtUp = true;            // 限位上升沿触发
         private bool isHomeZero = false;        // 原点清零
 

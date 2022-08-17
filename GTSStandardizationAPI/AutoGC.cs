@@ -169,9 +169,12 @@ namespace GTSStandardizationAPI
             }
 
             // 判断限位状态
-            if (axis.NegArrived)
+            if (axis.NegArrived | axis.PosArrived)
             {
-                alarmId = alarmId | 16384;
+                if (axis.IsNegLmtActived)
+                {
+                    alarmId = alarmId | 16384;
+                }
             }
             else
             {
