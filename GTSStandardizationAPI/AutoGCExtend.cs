@@ -13,15 +13,19 @@ namespace GTSStandardizationAPI
         {
             MotionControl motionControl = new MotionControl();
             double position;
+            double physicalZero;
             gTS.GetPosition(dimension, out position);
+
             if (position > 180)
             {
-                gTS.MoveAbsolute(dimension, hightSpeed, 360, timeout);
+                physicalZero = 360 - offset;
+                gTS.MoveAbsolute(dimension, hightSpeed, physicalZero, timeout);
                 motionControl.MotorZero(dimension);
             }
             else
             {
-                gTS.MoveAbsolute(dimension, hightSpeed, 0, timeout);
+                physicalZero = -offset;
+                gTS.MoveAbsolute(dimension, hightSpeed, physicalZero, timeout);
             }
             gTS.Home(dimension, lowSpeed, offset, timeout);
         }
