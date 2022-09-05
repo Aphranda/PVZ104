@@ -18,13 +18,13 @@ namespace GTSStandardizationAPI
 
             if (position % 360 > 180)
             {
-                physicalZero = (position / 360) * 360 + 360 - offset;
+                physicalZero = (int)(position / 360) * 360 + 360 - offset;
                 gTS.MoveAbsolute(dimension, hightSpeed, physicalZero, timeout);
                 motionControl.MotorZero(dimension);
             }
             else
             {
-                physicalZero = (position / 360) * 360 - offset;
+                physicalZero = (int)(position / 360) * 360 - offset;
                 gTS.MoveAbsolute(dimension, hightSpeed, physicalZero, timeout);
             }
             gTS.Home(dimension, lowSpeed, offset, timeout);
