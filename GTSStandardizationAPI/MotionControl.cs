@@ -99,6 +99,7 @@ namespace GTSStandardizationAPI
         /// <returns>初始化状态</returns>
         public E_Result CardInitial()
         {
+            alarmId = 0;
             short rtn = 0;
 
             //获取控制器信息
@@ -720,6 +721,11 @@ namespace GTSStandardizationAPI
             if (motionIObyte[0] == '1')
             {
                 axis.IsAlarming = true;
+                alarmId = alarmId | 32768;
+            }
+            else
+            {
+                axis.IsAlarming = false;
             }
             if (motionIObyte[2] == '1')
             {

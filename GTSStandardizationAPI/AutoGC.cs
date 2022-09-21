@@ -121,11 +121,7 @@ namespace GTSStandardizationAPI
             int timeflag = 0;
             motionControl.MotorIOControl(false, 0);
             motionControl.MotorIOControl(false, 1);
-            while (timeflag <= servoResetTimeDelay)
-            {
-                SpinWait.SpinUntil(() => true, 1000);
-                timeflag = timeflag + 1000;
-            }
+            SpinWait.SpinUntil(() => false, (int)servoResetTimeDelay);
             // motionControl.MotorIOControl(true, 0);
             motionControl.MotorIOControl(true, 0);
             motionControl.MotorIOControl(true, 1);
@@ -145,7 +141,7 @@ namespace GTSStandardizationAPI
             alarmId = motionControl.alarmId;
             status = E_Turntable_Status.alarm;
             Axis axis = motionControl.MotorGetStatus(dimension);
-            if (axis.IsRunning == true)
+            if (axis.IsRunning)
             {
                 status = E_Turntable_Status.moving;
             }
