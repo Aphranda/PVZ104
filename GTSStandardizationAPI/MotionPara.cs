@@ -277,8 +277,8 @@ namespace GTSStandardizationAPI
         private ushort axisNumber = 0;
         private double pos = 36;
         private double vel = 10;
-        private double acc = 100;
-        private double dec = 100;
+        private double acc = 25;
+        private double dec = 25;
         private double jumpVel = 0.0;
         private double endVel = 0.0;
         private int mode = 0;
@@ -368,7 +368,7 @@ namespace GTSStandardizationAPI
         private bool isNegHome = true;         // 是否反向回零
         private double homeMaxPos = 360;        // 复位最大距离
         private double serchHomeVel = 10;       // 搜索速度
-        private double homeAcc = 1000;          // 搜索加速度
+        private double homeAcc = 200;          // 搜索加速度
         private double homeBackVel = 1;         // 原点返回速度
         private double homeOffset = 0;          // 原点偏移
         private double homeOffsetBegin = 0;     // 起始反向距离
