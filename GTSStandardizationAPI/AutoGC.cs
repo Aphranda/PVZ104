@@ -121,10 +121,11 @@ namespace GTSStandardizationAPI
             int timeflag = 0;
             motionControl.MotorIOControl(false, 0);
             motionControl.MotorIOControl(false, 1);
-            SpinWait.SpinUntil(() => false, (int)servoResetTimeDelay);
+            SpinWait.SpinUntil(() => false,2000);
             // motionControl.MotorIOControl(true, 0);
             motionControl.MotorIOControl(true, 0);
             motionControl.MotorIOControl(true, 1);
+            SpinWait.SpinUntil(() => false, (int)(servoResetTimeDelay -2000));
             motionControl.CardInitial();
             return motionControl.ServoEnable(dimension, true);
         }

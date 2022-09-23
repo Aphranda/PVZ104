@@ -721,11 +721,12 @@ namespace GTSStandardizationAPI
             if (motionIObyte[0] == '1')
             {
                 axis.IsAlarming = true;
-                alarmId = alarmId | 32768;
+                alarmId = 32768;
             }
             else
             {
                 axis.IsAlarming = false;
+                alarmId = 0;
             }
             if (motionIObyte[2] == '1')
             {
