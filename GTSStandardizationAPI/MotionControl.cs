@@ -139,7 +139,7 @@ namespace GTSStandardizationAPI
 
             // TODO 根据机械结构配置各轴参数
             mp[0].Scale = 18000;
-            mp[1].Scale = 182000;
+            mp[1].Scale = 455000;
             ax[0].IsPoslmtDown = false;
             ax[0].IsPoslmtDown = false;
             ax[1].IsPoslmtDown = true;
