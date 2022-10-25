@@ -1,11 +1,5 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using GC.Frame.Motion.Private;
 
 namespace GTSStandardizationAPI
 {
@@ -59,7 +53,7 @@ namespace GTSStandardizationAPI
         // 查询转动状态
         public E_Result GetStatus(Dimension dimension, out E_Turntable_Status status, out int alarmId);
         // 转动初始化
-        public E_Result Init(Dimension dimension, UInt32 ServoResetTimeDelay = 5000);
+        public E_Result Init(Dimension dimension, bool init_flag, UInt32 ServoResetTimeDelay = 5000);
         // 转动寻零
         public E_Result Home(Dimension dimension, double speed, double offset, int timeout = -1);
 
@@ -116,18 +110,28 @@ namespace GTSStandardizationAPI
         /// <param name="dimension">维度</param>
         /// <param name="servoResetTimeDelay">初始化时间</param>
         /// <returns></returns>
-        public E_Result Init(Dimension dimension, UInt32 servoResetTimeDelay = 5000)
+        public E_Result Init(Dimension dimension, bool init_flag, UInt32 servoResetTimeDelay = 5000)
         {
-            int timeflag = 0;
-            motionControl.MotorIOControl(false, 0);
-            motionControl.MotorIOControl(false, 1);
-            SpinWait.SpinUntil(() => false,2000);
-            // motionControl.MotorIOControl(true, 0);
-            motionControl.MotorIOControl(true, 0);
-            motionControl.MotorIOControl(true, 1);
-            SpinWait.SpinUntil(() => false, (int)(servoResetTimeDelay -2000));
-            motionControl.CardInitial();
-            return motionControl.ServoEnable(dimension, true);
+            if (init_flag)
+            {
+                motionControl.MotorIOControl(false, 0);
+                motionControl.MotorIOControl(false, 1);
+                SpinWait.SpinUntil(() => false, 2000);
+
+                motionControl.MotorIOControl(true, 0);
+                motionControl.MotorIOControl(true, 1);
+                SpinWait.SpinUntil(() => false, (int)(servoResetTimeDelay - 2000));
+                motionControl.CardInitial();
+                return motionControl.ServoEnable(dimension, true);
+            }
+            else
+            {
+                motionControl.MotorIOControl(true, 0);
+                motionControl.MotorIOControl(true, 1);
+                motionControl.CardInitial();
+                return motionControl.ServoEnable(dimension, true);
+            }
+
         }
 
         /// <summary>
