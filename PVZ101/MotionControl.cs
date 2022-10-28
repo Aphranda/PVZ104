@@ -1,12 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using GC.Frame.Motion.Private;
-using System.Diagnostics;
 
-namespace GTSStandardizationAPI
+namespace PVZ101
 {
     public class MotionControl
     {

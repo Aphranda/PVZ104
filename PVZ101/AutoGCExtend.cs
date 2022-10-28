@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GTSStandardizationAPI
+namespace PVZ101
 {
     public static class AutoGCExtend
     {

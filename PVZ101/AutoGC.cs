@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace GTSStandardizationAPI
+namespace PVZ101
 {
     public enum E_Turntable_Status { alarm = 0, moving = 1, ready = 2, stop = 3 }
     /// <summary>
