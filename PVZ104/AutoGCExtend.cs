@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace PVZ101
+﻿namespace PVZ104
 {
     public static class AutoGCExtend
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using GC.Frame.Motion.Private;
 
-namespace PVZ101
+namespace PVZ104
 {
     public class MotionControl
     {
