@@ -12,8 +12,8 @@ namespace PVZ104
         // 内部使用的全局变量
         int NUM = 0;                            // 扫描轴数量
         short On = 1, Off = 0;                  // 开关定义
-        Axis[] ax = new Axis[12];               // 定义12轴配置
-        MotionPara[] mp = new MotionPara[12];   // 定义12轴参数
+        Axis[] ax = new Axis[8];               // 定义8轴配置
+        MotionPara[] mp = new MotionPara[8];   // 定义8轴参数
         private UInt16 DevHandle = 0;           // 定义控制器句柄
         private int currentAxis = 0;            // 定义当前轴index
         private ushort[] axisHandle;            // 可控制单轴参数配置
@@ -22,6 +22,7 @@ namespace PVZ104
         object obj = new object();              // 定义
         bool isConnected = false;               // 定义连接状态
         CNMCLib20.TDevResourceInfo devInformation = new CNMCLib20.TDevResourceInfo();
+        FileConfiguration FileConfiguration = new FileConfiguration();
 
         /// <summary>
         /// 初始化轴参数
@@ -123,7 +124,16 @@ namespace PVZ104
             //读取默认运动参数
             for (int i = 0; i < NUM; i++)
             {
-                mp[i] = GetMotionPara(axisHandle[i]);
+
+                try
+                {
+                    mp[i] = FileConfiguration.GetMotionPara(axisHandle[i]);
+                }
+                catch (Exception)
+                {
+
+                    mp[i] = GetMotionPara(axisHandle[i]);
+                }
             }
             //获取并配置各轴参数
             for (ushort i = 0; i < NUM; i++)

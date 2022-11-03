@@ -362,3 +362,5 @@ MigrationBackup/
 FodyWeavers.xsd
 /RZDemo
 /GTSStandardizationAPI/Program.cs
+/PVZ104/Program.cs
+*.editorconfig
