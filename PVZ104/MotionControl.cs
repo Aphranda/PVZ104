@@ -565,6 +565,35 @@ namespace PVZ104
         }
 
         /// <summary>
+        /// 设置单轴螺距补偿(0.5°补偿一次)
+        /// </summary>
+        /// <param name="dimension"></param>
+        /// <param name="comPos"></param>
+        /// <param name="comNeg"></param>
+        /// <returns></returns>
+        public E_Result MotorCompensationPara(Dimension dimension, short[] comPos, short[] comNeg)
+        {
+            short rtn = 0;
+            currentAxis = (int)dimension;
+            rtn = CNMCLib20.NMC_MtSetLeadScrewCompPara(ax[currentAxis].AxisHandle, 720, 0, 360 * (int)mp[currentAxis].Scale, comPos, comNeg);
+            return _Result(rtn == 0);
+        }
+
+        /// <summary>
+        /// 启动单轴螺距补偿
+        /// </summary>
+        /// <param name="dimension"></param>
+        /// <returns></returns>
+        public E_Result MotorCompensationEnable(Dimension dimension, bool enable)
+        {
+            short rtn = 0;
+            currentAxis = (int)dimension;
+            short sw = enable == true ? (short)1 : (short)0;
+            rtn = CNMCLib20.NMC_MtEnableLeadScrew(ax[currentAxis].AxisHandle, sw);
+            return E_Result.E_ToDo;
+        }
+
+        /// <summary>
         /// 高速二维位置比较参数设置
         /// </summary>
         /// <param name="dimension">维度</param>
