@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using GC.Frame.Motion.Private;
 
 namespace PVZ104
@@ -575,7 +576,7 @@ namespace PVZ104
         {
             short rtn = 0;
             currentAxis = (int)dimension;
-            rtn = CNMCLib20.NMC_MtSetLeadScrewCompPara(ax[currentAxis].AxisHandle, 720, 0, 360 * (int)mp[currentAxis].Scale, comPos, comNeg);
+            rtn = CNMCLib20.NMC_MtSetLeadScrewCompPara(ax[currentAxis].AxisHandle, 360, 0, 360 * (int)mp[currentAxis].Scale, comPos, comNeg);
             return _Result(rtn == 0);
         }
 
@@ -1040,5 +1041,29 @@ namespace PVZ104
             }
         }
 
+
+        // 多轴轮询
+        public E_Result BlockingQuery(Dimension[] dimensions, int timeout)
+        {
+            int block_timeout = 0;
+            while (timeout > block_timeout)
+            {
+                bool result = true;
+                for (int i = 0; i < dimensions.Length; i++)
+                {
+                    Axis axis = MotorGetStatus(dimensions[i]);
+
+                    result = axis.IsRunning & result;
+
+                    SpinWait.SpinUntil(() => !result, 1000); // 延时1s
+                    if (!result)
+                    {
+                        return E_Result.E_SUCCESS;
+                    }
+                    block_timeout = block_timeout + 1000;
+                }
+            }
+            return E_Result.E_TIMEOUT;
+        }
     }
 }

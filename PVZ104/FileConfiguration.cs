@@ -40,6 +40,8 @@ namespace PVZ104
                 ini.IniWriteValue(i.ToString(), "ZEROPOS", "1");
                 ini.IniWriteValue(i.ToString(), "SMOTH", "100");
                 ini.IniWriteValue(i.ToString(), "DIRECTION", "true");
+                ini.IniWriteValue(i.ToString(), "COMPOS", "0");
+                ini.IniWriteValue(i.ToString(), "COMNEG", "0");
             }
         }
 
@@ -65,6 +67,28 @@ namespace PVZ104
             motionPara.Smoth = Convert.ToInt32(iniHelper.IniReadValue(axishandle.ToString(), "SMOTH"));
             motionPara.Direction = Convert.ToBoolean(iniHelper.IniReadValue(axishandle.ToString(), "DIRECTION"));
             return motionPara;
+        }
+
+        public short[] GetCompensationPara(ushort axishandle)
+        {
+
+            string[] comPos = iniHelper.IniReadValue(axishandle.ToString(), "COMPOS").Split(',');
+            string[] comNeg = iniHelper.IniReadValue(axishandle.ToString(), "COMNEG").Split(',');
+
+            int comPosLen = comPos.Length;
+            int comNegLen = comNeg.Length;
+
+            short[] comData = new short[comPosLen + comNegLen];
+
+            for (int i = 0; i < comPos.Length; i++)
+            {
+                comData[i] = Convert.ToInt16(comPos[i]);
+            }
+            for (int i = comPosLen; i < comPosLen + comNegLen; i++)
+            {
+                comData[i] = Convert.ToInt16(comNeg[i - comPosLen]);
+            }
+            return comData;
         }
     }
 
