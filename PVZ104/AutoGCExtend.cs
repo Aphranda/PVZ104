@@ -6,8 +6,9 @@ namespace PVZ104
     public static class AutoGCExtend
     {
         // 原点复位，带系统偏置
-        public static void Reset(this GTSApi gTS, Dimension dimension, double hightSpeed, double lowSpeed, double offset, int timeout = -1)
+        public static E_Result Reset(this GTSApi gTS, Dimension dimension, double hightSpeed, double lowSpeed, double offset, int timeout = -1)
         {
+            E_Result result;
             MotionControl motionControl = new MotionControl();
             double position;
             double physicalZero;
@@ -24,7 +25,9 @@ namespace PVZ104
                 physicalZero = (int)(position / 360) * 360 - offset;
                 gTS.MoveAbsolute(dimension, hightSpeed, physicalZero, timeout);
             }
-            gTS.Home(dimension, lowSpeed, offset, timeout);
+            result = gTS.Home(dimension, lowSpeed, offset, timeout);
+
+            return result;
         }
         // 继续移动
         public static void GoON(this GTSApi gTS)
@@ -33,7 +36,7 @@ namespace PVZ104
         }
 
         // 多轴同时回零
-        public static void HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+        public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
         {
             MotionControl motionControl = new MotionControl();
 
@@ -46,10 +49,11 @@ namespace PVZ104
             }
             // 轮询多轴复位是否完成,原点复位不知道当前位置，默认给60s复位时间
             motionControl.BlockingQuery(dimensions, 60000);
+            return E_Result.E_SUCCESS;
         }
 
         // 多轴同时移动
-        public static void MoveAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] position, int timeout = -1)
+        public static E_Result MoveAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] position, int timeout = -1)
         {
             MotionControl motionControl = new MotionControl();
 
@@ -78,6 +82,7 @@ namespace PVZ104
 
             //轮询复位是否完成
             motionControl.BlockingQuery(dimensions, timeoutArray.Max());
+            return E_Result.E_SUCCESS;
         }
     }
 }
