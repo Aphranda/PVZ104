@@ -279,7 +279,7 @@ public E_RESULT MoveRelative(enum dimension, double speed, double position, int 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.6.1 绝对定位
+##### 1.6.2 绝对定位
 以原点复位之后的零点为基准，运动到指定的位置
 
 ```c#
@@ -299,7 +299,7 @@ public E_RESULT MoveAbsolute(enum dimension, double speed, double position, int 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.6.2 多轴绝对定位
+##### 1.6.3 多轴绝对定位
 以各轴独立的零点为基准，各轴同时运动到指定的位置
 
 ```c#
@@ -319,7 +319,7 @@ public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[]
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.6.3 JOG运动
+##### 1.6.4 JOG运动
 以速度模式运行
 
 ```c#
