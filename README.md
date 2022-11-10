@@ -210,7 +210,7 @@ public E_RESULT Home(enum dimension, double speed, double offset, int timeout = 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.6.2
+##### 1.6.2 单轴快速回零
 
 对于无限旋转的单轴进行快速回零
 
@@ -234,7 +234,8 @@ public E_RESULT Home(enum dimension, double speed, double offset, int timeout = 
 
 - A value of the enumeration type `E_RESULT`.
   
-##### 1.6.3
+##### 1.6.3 多轴同时回零
+对多轴同时进行原点复位操作
 
 ```C#
 public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
