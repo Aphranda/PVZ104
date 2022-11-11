@@ -238,7 +238,7 @@ public E_RESULT Home(enum dimension, double speed, double offset, int timeout = 
 对多轴同时进行原点复位操作
 
 ```C#
-public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
 ```
 
 **parameter:**
@@ -303,7 +303,7 @@ public E_RESULT MoveAbsolute(enum dimension, double speed, double position, int 
 以各轴独立的零点为基准，各轴同时运动到指定的位置
 
 ```c#
-public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
 ```
 
 **parameter:**
