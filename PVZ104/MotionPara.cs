@@ -368,8 +368,8 @@ namespace PVZ104
         private bool isNegHome = true;         // 是否反向回零
         private double homeMaxPos = 360;        // 复位最大距离
         private double serchHomeVel = 10;       // 搜索速度
-        private double homeAcc = 200;          // 搜索加速度
-        private double homeBackVel = 1;         // 原点返回速度
+        private double homeAcc = 10;         // 搜索加速度
+        private double homeBackVel = 5;         // 原点返回速度
         private double homeOffset = 0;          // 原点偏移
         private double homeOffsetBegin = 0;     // 起始反向距离
         private double homeOffsetLmt = 0;       // 反向运动离开开关距离

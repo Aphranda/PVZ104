@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using GC.Frame.Motion.Private;
 
@@ -125,14 +126,14 @@ namespace PVZ104
             //读取默认运动参数
             for (int i = 0; i < NUM; i++)
             {
-
                 try
                 {
                     mp[i] = FileConfiguration.GetMotionPara(axisHandle[i]);
+                    Debug.WriteLine("载入参数");
                 }
                 catch (Exception)
                 {
-
+                    Debug.WriteLine("默认参数");
                     mp[i] = GetMotionPara(axisHandle[i]);
                 }
             }
