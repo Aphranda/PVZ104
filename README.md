@@ -164,7 +164,7 @@ public E_Result GetStatus(out enum E_Turntable_Status, out int alarmId)
 - A value of the enumeration type `E_Result`.
 
 
-#### 1.5 转台初始化
+#### 1.4 转台初始化
 
 在连接到转台成功后，控制转台执行功能之前，必须使用此方法进行转台指定的参数初始化。如不需要设置特定参数，此方法可为空方法直接返回E_RESULT = E_SUCCESS
 
@@ -184,11 +184,11 @@ public E_RESULT Init(enum dimension, bool servo, Uint32 ServoResetTimeDelay)
 - A value of the enumeration type `E_RESULT`.
 
 
-#### 1.6 转台寻零
+#### 1.5 转台寻零
 
 在连接到转台成功后，通过此方法执行在合理的超时时间内对转台的**物理零点寻零**逻辑
 
-##### 16.1 单轴寻零
+##### 15.1 单轴寻零
 
 对单轴进行带偏置的原点复位
 
@@ -210,7 +210,7 @@ public E_RESULT Home(enum dimension, double speed, double offset, int timeout = 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.6.2 单轴快速回零
+##### 1.5.2 单轴快速回零
 
 对于无限旋转的单轴进行快速回零
 
@@ -234,11 +234,11 @@ public E_RESULT Home(enum dimension, double speed, double offset, int timeout = 
 
 - A value of the enumeration type `E_RESULT`.
   
-##### 1.6.3 多轴同时回零
+##### 1.5.3 多轴同时回零
 对多轴同时进行原点复位操作
 
 ```C#
-public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
 ```
 
 **parameter:**
@@ -255,11 +255,12 @@ public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[]
 
 - A value of the enumeration type `E_RESULT`.
 
-#### 1.7 转台转动/移动
+#### 1.6 转台转动/移动
 
 在连接到转台成功后，通过此方法在合理的超时时间内控制转台旋转/移动到指定的角度(位置)。
 
-##### 1.7.1 相对定位
+##### 1.6.1 相对定位
+以当前位置为基准，运行输入的距离
 
 ```c#
 public E_RESULT MoveRelative(enum dimension, double speed, double position, int timeout = -1)
@@ -278,7 +279,8 @@ public E_RESULT MoveRelative(enum dimension, double speed, double position, int 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.7.1 绝对定位
+##### 1.6.2 绝对定位
+以原点复位之后的零点为基准，运动到指定的位置
 
 ```c#
 public E_RESULT MoveAbsolute(enum dimension, double speed, double position, int timeout = -1)
@@ -297,10 +299,11 @@ public E_RESULT MoveAbsolute(enum dimension, double speed, double position, int 
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.7.2 多轴绝对定位
+##### 1.6.3 多轴绝对定位
+以各轴独立的零点为基准，各轴同时运动到指定的位置
 
 ```c#
-public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
 ```
 
 **parameter:**
@@ -316,7 +319,8 @@ public static E_Result HomeAll(this GTSApi gts, Dimension[] dimensions, double[]
 
 - A value of the enumeration type `E_RESULT`.
 
-##### 1.7.3 JOG运动
+##### 1.6.4 JOG运动
+以速度模式运行
 
 ```c#
 public E_RESULT JOG(Dimension dimension, double speed, bool direction, int timeout = -1)
@@ -337,11 +341,12 @@ public E_RESULT JOG(Dimension dimension, double speed, bool direction, int timeo
 - A value of the enumeration type `E_RESULT`.
 
 
-#### 1.8 连续触发功能
+#### 1.7 连续触发功能
 
 在连接到转台成功后，通过此方法控制转台进行连续触发，输出脉冲。
 
-##### 1.8.1 连续触发开始
+##### 1.7.1 连续触发开始
+配置脉冲输出参数，并准备开始输出脉冲
 
 ```c#
 public E_Result Trigger(Dimension dimension, double start, double stop, double step, int pluseWidth, int timeout = -1);
@@ -363,8 +368,8 @@ public E_Result Trigger(Dimension dimension, double start, double stop, double s
 
 - 函数实现需支持上位机多线程调用（多轴）
 
-##### 1.8.2 连续触发停止
-
+##### 1.7.2 连续触发停止
+停止输出脉冲，并清空脉冲输出参数
 ```c#
 public E_Result TriggerStop(Dimension dimension);
 ```
@@ -381,26 +386,8 @@ public E_Result TriggerStop(Dimension dimension);
 
 - 连续触发停止时会清空连续触发设置
   
-#### 1.9 停止转动
 
-```c#
-public E_Result Stop(enum dimension)
-```
-
-**Parameter：**
-
-- `dimension`: 设置是转台的哪个维度停止转动
-
-**Returns:**
-
-- A value of the enumeration type `E_Result`.
-
-**Note:**
-
-- 函数实现需支持上位机多线程调用（多轴）
-
-
-#### 1.9 转台停止转动
+#### 1.8 转台停止转动
 
 在连接到转台成功后，通过此方法控制转台停止移动，如没有移动亦可调用此方法保证转台为停止状态
 
@@ -421,7 +408,7 @@ public E_Result Stop(enum dimension)
 - 函数实现需支持上位机多线程调用（多轴）
 
 
-#### 1.10 获取转台速度
+#### 1.9 获取转台速度
 
 从转台获取当前维度的转台转速
 
@@ -440,7 +427,7 @@ public E_Result GetSpeed(enum dimension, out double speed)
 - A value of the enumeration type `E_Result`.
 
 
-#### 1.11 获取转台角度/位置
+#### 1.10 获取转台角度/位置
 
 ```c#
 public E_Result GetPosition(enum dimension, out double position)
