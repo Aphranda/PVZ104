@@ -78,6 +78,8 @@ namespace PVZ104
         public E_Result GetSpeed(Dimension dimension, out double speed);
         // 获取轴位置/角度
         public E_Result GetPosition(Dimension dimension, out double position);
+
+        // 日志类，增加大型设备的传感器监测信息
     }
     public class AutoGCApi : GTSApi
     {
@@ -230,6 +232,7 @@ namespace PVZ104
 
             // 轮询运动状态
             BlockingQuery(dimension, finalTimeout);
+            SpinWait.SpinUntil(() => false, 1500);
             return e_Result;
         }
 
