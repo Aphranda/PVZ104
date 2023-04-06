@@ -277,8 +277,8 @@ namespace PVZ104
         private ushort axisNumber = 0;
         private double pos = 36;
         private double vel = 10;
-        private double acc = 25;
-        private double dec = 25;
+        private double acc = 50;   //5000/25=200ms
+        private double dec = 50;
         private double jumpVel = 0.0;
         private double endVel = 0.0;
         private int mode = 0;
@@ -324,9 +324,9 @@ namespace PVZ104
         private double softlmtneg = -32768;
 
         // 安全数值设置
-        private double estpDec = 36;    // 急停减速度
-        private double maxVel = 72;     // 最大速度
-        private double maxAcc = 36;     // 最大加速度
+        private double estpDec = 360;    // 急停减速度
+        private double maxVel = 720;     // 最大速度
+        private double maxAcc = 360;     // 最大加速度
 
         // 其他参数
         private Int32 posErr = 0;       // 最大误差设定
@@ -366,10 +366,10 @@ namespace PVZ104
     {
         private short homeMode = 3;             // 原点复位模式
         private bool isNegHome = true;         // 是否反向回零
-        private double homeMaxPos = 360;        // 复位最大距离
+        private double homeMaxPos = 36000000;        // 复位最大距离
         private double serchHomeVel = 10;       // 搜索速度
-        private double homeAcc = 10;         // 搜索加速度
-        private double homeBackVel = 5;         // 原点返回速度
+        private double homeAcc = 50;           // 搜索加速度系数5000 
+        private double homeBackVel = 50;         // 原点返回速度
         private double homeOffset = 0;          // 原点偏移
         private double homeOffsetBegin = 0;     // 起始反向距离
         private double homeOffsetLmt = 0;       // 反向运动离开开关距离

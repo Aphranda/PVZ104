@@ -116,6 +116,7 @@ namespace PVZ104
         {
             if (init_flag)
             {
+                motionControl.ServoEnable(dimension, false);
                 motionControl.MotorIOControl(false, 0);
                 motionControl.MotorIOControl(false, 1);
                 SpinWait.SpinUntil(() => false, 2000);

@@ -145,16 +145,22 @@ namespace PVZ104
 
 
             // TODO 根据机械结构配置各轴参数
-            mp[0].Scale = 18000;
-            mp[1].Scale = 455000;
+            mp[0].Scale = 18000;      // 1°的脉冲数量 18000
+            mp[1].Scale = 252505;    // 262600 455000
+            mp[2].Scale = 30010.5;    // 1mm的脉冲
+            mp[3].Scale = 20000;
             ax[0].IsPoslmtDown = false;
             ax[0].IsPoslmtDown = false;
-            ax[1].IsPoslmtDown = true;
-            ax[1].IsNeglmtDown = true;
+            ax[1].IsPoslmtDown = false; // true
+            ax[1].IsNeglmtDown = false; // ture
+            ax[2].IsNeglmtDown = true;
+            ax[2].IsPoslmtDown = true;
+
 
             AxisPara axisPara = new AxisPara();
-
+            // SetAxisPara(Dimension.Axis01, axisPara);
             SetAxisPara(Dimension.Axis02, axisPara);
+            SetAxisPara(Dimension.Axis03, axisPara);
             return _Result(rtn == 0);
         }
 
@@ -567,7 +573,7 @@ namespace PVZ104
         }
 
         /// <summary>
-        /// 设置单轴螺距补偿(0.5°补偿一次)
+        /// 设置单轴螺距补偿(1°补偿一次)
         /// </summary>
         /// <param name="dimension"></param>
         /// <param name="comPos"></param>
