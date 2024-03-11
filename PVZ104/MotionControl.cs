@@ -14,16 +14,22 @@ namespace PVZ104
         // 内部使用的全局变量
         int NUM = 0;                            // 扫描轴数量
         short On = 1, Off = 0;                  // 开关定义
+
+        // 轴函数定义
         Axis[] ax = new Axis[8];               // 定义8轴配置
         MotionPara[] mp = new MotionPara[8];   // 定义8轴参数
-        private UInt16 DevHandle = 0;           // 定义控制器句柄
+        HomePara[] hp = new HomePara[8];        // 定义8轴回零参数
+
+        //句柄定义
+        private ushort DevHandle = 0;           // 定义控制器句柄
         private int currentAxis = 0;            // 定义当前轴index
         private ushort[] axisHandle;            // 可控制单轴参数配置
-        private UInt16 AxisCurrentHandle = 0;   // 定义当前轴句柄
+        private ushort AxisCurrentHandle = 0;   // 定义当前轴句柄
 
-        object obj = new object();              // 定义
+        object obj = new object();              // 定义线程锁
+
         bool isConnected = false;               // 定义连接状态
-        CNMCLib20.TDevResourceInfo devInformation = new CNMCLib20.TDevResourceInfo();
+        
         FileConfiguration FileConfiguration = new FileConfiguration();
 
         /// <summary>
@@ -36,6 +42,7 @@ namespace PVZ104
             {
                 ax[i] = new Axis();
                 mp[i] = new MotionPara();
+                hp[i] = new HomePara();
             }
         }
 
@@ -100,6 +107,8 @@ namespace PVZ104
             alarmId = 0;
             short rtn = 0;
 
+            CNMCLib20.TDevResourceInfo devInformation = new CNMCLib20.TDevResourceInfo();
+
             //获取控制器信息
             rtn = CNMCLib20.NMC_GetCardInfo(DevHandle, ref devInformation);
 
@@ -146,7 +155,7 @@ namespace PVZ104
 
             // TODO 根据机械结构配置各轴参数
             mp[0].Scale = 18000;      // 1°的脉冲数量 18000
-            mp[1].Scale = 252505;    // 262600 455000
+            mp[1].Scale = 252505;    // 26260 455000
             mp[2].Scale = 30010.5;    // 1mm的脉冲
             mp[3].Scale = 20000;
             ax[0].IsPoslmtDown = false;
@@ -238,8 +247,6 @@ namespace PVZ104
             // 实例化原点复位参数
             HomePara homePara = new HomePara();
 
-            // 实例化运动配置
-            // mp[currentAxis] = GetMotionPara(AxisCurrentHandle);
 
             // 实例化单轴配置
             ax[currentAxis].HomeMode = homePara.HomeMode;
@@ -617,7 +624,7 @@ namespace PVZ104
             MotorCompareHS2Stop();
 
             // 实例化比较参数
-            ComparaParaHS2 comparaParaHS2 = new ComparaParaHS2();
+            HS2ComparaPara comparaParaHS2 = new HS2ComparaPara();
 
             // 定义比较参数
             CNMCLib20.TComp2DimensParamEx comp2DimensParamEx = new CNMCLib20.TComp2DimensParamEx();
@@ -681,11 +688,11 @@ namespace PVZ104
         /// </summary>
         /// <param name="compareStatus">比较参数</param>
         /// <returns></returns>
-        public E_Result MotorCompareHS2Status(out CompareStatus compareStatus)
+        public E_Result MotorCompareHS2Status(out HS2CompareStatus compareStatus)
         {
             short rtn = 0;
             short grounp = 0;
-            compareStatus = new CompareStatus();
+            compareStatus = new HS2CompareStatus();
             CNMCLib20.TComp2DimensSts comp2DimensSts = new CNMCLib20.TComp2DimensSts();
             rtn = CNMCLib20.NMC_Comp2DimensStatusEx(DevHandle, grounp, ref comp2DimensSts, 0);
 

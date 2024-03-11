@@ -398,7 +398,7 @@ namespace PVZ104
     /// <summary>
     /// 高速触发参数类
     /// </summary>
-    public class ComparaParaHS2
+    public class HS2ComparaPara
     {
         private short outputChn = 0;
         private short outputType = 0;
@@ -432,7 +432,7 @@ namespace PVZ104
     /// <summary>
     /// 高速触发状态类
     /// </summary>
-    public class CompareStatus
+    public class HS2CompareStatus
     {
         public short sts;              // 运行状态，0 空闲 1 忙
         public int freeSpace;         // 控制器剩余空间

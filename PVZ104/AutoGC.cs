@@ -86,6 +86,7 @@ namespace PVZ104
 
         MotionControl motionControl = new MotionControl();
         public byte[] ipv4 = new byte[4];
+
         /// <summary>
         /// 连接高川运动控制卡
         /// </summary>
@@ -363,7 +364,7 @@ namespace PVZ104
             }
 
             // 检查参数
-            CompareStatus compareStatus = new CompareStatus();
+            HS2CompareStatus compareStatus = new HS2CompareStatus();
             e_Result = motionControl.MotorCompareHS2Status(out compareStatus);
 
             if (e_Result != E_Result.E_SUCCESS)
