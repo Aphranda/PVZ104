@@ -364,7 +364,6 @@ FodyWeavers.xsd
 /PVZ104/Program.cs
 *.editorconfig
 *.exe
-*.config
 *.zip
 *.resx
 *.settings
