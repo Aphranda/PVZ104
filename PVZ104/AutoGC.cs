@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 
 namespace PVZ104
@@ -48,6 +49,10 @@ namespace PVZ104
     {
         // 转动连接
         public E_Result Connect(byte[] ipv4);
+        // 最近一次连接诊断
+        public MotionConnectionDiagnostic LastConnectionDiagnostic { get; }
+        // 最近一次连接诊断文本
+        public string LastConnectionMessage { get; }
         // 转动断开
         public E_Result Disconnect();
         // 查询转动状态
@@ -78,14 +83,27 @@ namespace PVZ104
         public E_Result GetSpeed(Dimension dimension, out double speed);
         // 获取轴位置/角度
         public E_Result GetPosition(Dimension dimension, out double position);
+        // 轴位置清零
+        public E_Result Zero(Dimension dimension);
+        // 多轴同时回零
+        public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1);
+        // 多轴同时移动
+        public E_Result MoveAll(Dimension[] dimensions, double[] speed, double[] position, int timeout = -1);
 
         // 日志类，增加大型设备的传感器监测信息
     }
     public class AutoGCApi : GTSApi
     {
+        private const int PollIntervalMs = 100;
+        private const int StartGraceMs = 500;
+        private const int DefaultMoveTimeoutMs = 60000;
 
         MotionControl motionControl = new MotionControl();
         public byte[] ipv4 = new byte[4];
+
+        public MotionConnectionDiagnostic LastConnectionDiagnostic => motionControl.LastConnectionDiagnostic;
+
+        public string LastConnectionMessage => motionControl.LastConnectionDiagnostic.ToString();
 
         /// <summary>
         /// 连接高川运动控制卡
@@ -115,24 +133,77 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result Init(Dimension dimension, bool init_flag, UInt32 servoResetTimeDelay = 5000)
         {
+            if (!motionControl.IsConnected)
+            {
+                return E_Result.E_ALREADY_DISCONNECTED;
+            }
+
+            E_Result result = motionControl.CardInitial();
+            if (result != E_Result.E_SUCCESS)
+            {
+                return result;
+            }
+
             if (init_flag)
             {
-                motionControl.ServoEnable(dimension, false);
-                motionControl.MotorIOControl(false, 0);
-                motionControl.MotorIOControl(false, 1);
+                // IO 控制伺服驱动器供电；先建立轴句柄，才能可靠执行 Servo Off/On。
+                result = motionControl.ServoEnable(dimension, false);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                result = motionControl.MotorIOControl(false, 0);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                result = motionControl.MotorIOControl(false, 1);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
                 SpinWait.SpinUntil(() => false, 2000);
 
-                motionControl.MotorIOControl(true, 0);
-                motionControl.MotorIOControl(true, 1);
-                SpinWait.SpinUntil(() => false, (int)(servoResetTimeDelay - 2000));
-                motionControl.CardInitial();
+                result = motionControl.MotorIOControl(true, 0);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                result = motionControl.MotorIOControl(true, 1);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                int resetDelay = servoResetTimeDelay > int.MaxValue ? int.MaxValue : (int)servoResetTimeDelay;
+                SpinWait.SpinUntil(() => false, Math.Max(0, resetDelay - 2000));
+
+                result = motionControl.CardInitial();
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
                 return motionControl.ServoEnable(dimension, true);
             }
             else
             {
-                motionControl.MotorIOControl(true, 0);
-                motionControl.MotorIOControl(true, 1);
-                motionControl.CardInitial();
+                result = motionControl.MotorIOControl(true, 0);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                result = motionControl.MotorIOControl(true, 1);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
                 return motionControl.ServoEnable(dimension, true);
             }
 
@@ -147,9 +218,14 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result GetStatus(Dimension dimension, out E_Turntable_Status status, out int alarmId)
         {
-            alarmId = motionControl.alarmId;
             status = E_Turntable_Status.alarm;
-            Axis axis = motionControl.MotorGetStatus(dimension);
+            E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
+            if (result != E_Result.E_SUCCESS)
+            {
+                alarmId = motionControl.BuildDisconnectedAlarmId(dimension);
+                return result;
+            }
+
             if (axis.IsRunning)
             {
                 status = E_Turntable_Status.moving;
@@ -163,28 +239,7 @@ namespace PVZ104
                 status = E_Turntable_Status.alarm;
             }
 
-            // 连接状态判断
-            if (axis.IsConnected)
-            {
-                alarmId = alarmId & -129; // 将连接状态置位
-            }
-            else
-            {
-                alarmId = alarmId | 128;
-            }
-
-            // 判断限位状态
-            if (axis.NegArrived | axis.PosArrived)
-            {
-                if (axis.IsNegLmtActived)
-                {
-                    alarmId = alarmId | 16384;
-                }
-            }
-            else
-            {
-                alarmId = alarmId & -16385;
-            }
+            alarmId = motionControl.BuildStatusAlarmId(dimension, axis);
 
             // 获取IPV4地址
             ipv4 = motionControl.ipv4;
@@ -199,9 +254,9 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result GetPosition(Dimension dimension, out double position)
         {
-            Axis axis = motionControl.MotorGetStatus(dimension);
+            E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
             position = axis.CurrentPos1;
-            return E_Result.E_SUCCESS;
+            return result;
         }
 
         /// <summary>
@@ -212,9 +267,9 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result GetSpeed(Dimension dimension, out double speed)
         {
-            Axis axis = motionControl.MotorGetStatus(dimension);
+            E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
             speed = axis.CurrentVel;
-            return E_Result.E_SUCCESS;
+            return result;
         }
 
         /// <summary>
@@ -226,15 +281,24 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result Home(Dimension dimension, double speed, double offset, int timeout = -1)
         {
+            if (speed <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 执行Home时，当前位置是不可靠的，所以使用最大行程440
             int finalTimeout = CalculateTimeout(dimension, timeout, speed);
 
             // 驱动轴原点复位
             E_Result e_Result = motionControl.MotorHome(dimension, speed, offset);
+            if (e_Result != E_Result.E_SUCCESS)
+            {
+                return e_Result;
+            }
 
-            // 轮询运动状态
-            BlockingQuery(dimension, finalTimeout);
-            SpinWait.SpinUntil(() => false, 1500);
+            // 回零使用厂家回零状态位判断完成，避免普通运动状态未刷新导致提前返回。
+            e_Result = BlockingHomeQuery(dimension, finalTimeout);
+            Thread.Sleep(1500);
             return e_Result;
         }
 
@@ -248,15 +312,23 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result MoveRelative(Dimension dimension, double speed, double position, int timeout = -1)
         {
+            if (speed <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 计算内置超时时间
             int finalTimeout = CalculateTimeout(dimension, timeout, speed, position);
 
             // 驱动轴相对运动
             E_Result e_Result = motionControl.MotorRelative(dimension, speed, position);
+            if (e_Result != E_Result.E_SUCCESS)
+            {
+                return e_Result;
+            }
 
             // 轮询运动状态
-            BlockingQuery(dimension, finalTimeout);
-            return e_Result;
+            return BlockingQuery(dimension, finalTimeout);
         }
 
         /// <summary>
@@ -269,18 +341,31 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result MoveAbsolute(Dimension dimension, double speed, double position, int timeout = -1)
         {
+            if (speed <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 计算内置超时时间
             double currentPosition = 0;
-            GetPosition(dimension, out currentPosition);
+            E_Result positionResult = GetPosition(dimension, out currentPosition);
+            if (positionResult != E_Result.E_SUCCESS)
+            {
+                return positionResult;
+            }
+
             double movePosition = Math.Abs(currentPosition - position);
             int finalTimeout = CalculateTimeout(dimension, timeout, speed, movePosition);
 
             // 驱动轴绝对运动
             E_Result e_Result = motionControl.MotorAbsolute(dimension, speed, position);
+            if (e_Result != E_Result.E_SUCCESS)
+            {
+                return e_Result;
+            }
 
             // 轮询运动状态
-            BlockingQuery(dimension, finalTimeout);
-            return e_Result;
+            return BlockingQuery(dimension, finalTimeout);
         }
 
         /// <summary>
@@ -293,12 +378,26 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result Jog(Dimension dimension, double speed, bool direction, int timeout = -1)
         {
+            if (speed <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 驱动轴以速度模式运行
             E_Result e_Result = motionControl.MotorJog(dimension, speed, direction);
+            if (e_Result != E_Result.E_SUCCESS || timeout < 0)
+            {
+                return e_Result;
+            }
 
-            // 轮询运动状态
-            BlockingQuery(dimension, timeout);
-            return E_Result.E_SUCCESS;
+            // JOG 是速度模式，不能用点位运动的到位状态判断完成。
+            E_Result waitResult = BlockingJogQuery(dimension, timeout);
+            if (waitResult != E_Result.E_SUCCESS)
+            {
+                motionControl.MotorStop(dimension);
+            }
+
+            return waitResult;
         }
 
         /// <summary>
@@ -313,6 +412,11 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result Trigger(Dimension dimension, double start, double stop, double step, int pulseWidth, int timeout = -1)
         {
+            if (step <= 0 || stop <= start || pulseWidth <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 设置连续触发参数
             E_Result e_Result;
             e_Result = motionControl.MotorCompareHS2Para(dimension, pulseWidth);
@@ -323,6 +427,10 @@ namespace PVZ104
 
             // 设置连续脉冲数组
             int pulseNum = (int)((stop - start) / step); // 脉冲数量
+            if (pulseNum <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             if (pulseNum <= 128)
             {
@@ -332,7 +440,11 @@ namespace PVZ104
                     posArray[2 * i] = start + i * step;
                 }
 
-                motionControl.MotorCompareHs2Data(dimension, posArray);
+                e_Result = motionControl.MotorCompareHs2Data(dimension, posArray);
+                if (e_Result != E_Result.E_SUCCESS)
+                {
+                    return e_Result;
+                }
             }
             else if (pulseNum > 128)
             {
@@ -347,7 +459,11 @@ namespace PVZ104
                         {
                             posArray[2 * i] = currentPosition + i * step;
                         }
-                        motionControl.MotorCompareHs2Data(dimension, posArray);
+                        e_Result = motionControl.MotorCompareHs2Data(dimension, posArray);
+                        if (e_Result != E_Result.E_SUCCESS)
+                        {
+                            return e_Result;
+                        }
                     }
                     else if (residualPulse < 128)
                     {
@@ -356,7 +472,11 @@ namespace PVZ104
                         {
                             posArray[2 * i] = currentPosition + i * step;
                         }
-                        motionControl.MotorCompareHs2Data(dimension, posArray);
+                        e_Result = motionControl.MotorCompareHs2Data(dimension, posArray);
+                        if (e_Result != E_Result.E_SUCCESS)
+                        {
+                            return e_Result;
+                        }
                     }
                     residualPulse = residualPulse - 128;
                     currentPosition = currentPosition + 128 * step;
@@ -409,6 +529,115 @@ namespace PVZ104
         }
 
         /// <summary>
+        /// 轴位置清零
+        /// </summary>
+        /// <param name="dimension">维度</param>
+        /// <returns></returns>
+        public E_Result Zero(Dimension dimension)
+        {
+            return motionControl.MotorZero(dimension);
+        }
+
+        /// <summary>
+        /// 多轴同时回零
+        /// </summary>
+        public E_Result HomeAll(Dimension[] dimensions, double[] speed, double[] offset, int timeout = -1)
+        {
+            if (dimensions == null || speed == null || offset == null ||
+                dimensions.Length == 0 ||
+                dimensions.Length != speed.Length || dimensions.Length != offset.Length)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            for (int i = 0; i < dimensions.Length; i++)
+            {
+                if (speed[i] <= 0)
+                {
+                    return E_Result.E_INVALID_ARGUMENT;
+                }
+
+                E_Result result = motionControl.MotorHome(dimensions[i], speed[i], offset[i]);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    StopStartedAxes(dimensions, i, isHome: true);
+                    return result;
+                }
+
+                Thread.Sleep(100);
+            }
+
+            int finalTimeout = timeout < 0 ? DefaultMoveTimeoutMs : timeout;
+            for (int i = 0; i < dimensions.Length; i++)
+            {
+                finalTimeout = Math.Max(finalTimeout, CalculateTimeout(dimensions[i], timeout, speed[i]));
+            }
+
+            E_Result waitResult = BlockingHomeQuery(dimensions, finalTimeout);
+            if (waitResult != E_Result.E_SUCCESS)
+            {
+                StopStartedAxes(dimensions, dimensions.Length, isHome: true);
+            }
+
+            return waitResult;
+        }
+
+        /// <summary>
+        /// 多轴同时移动
+        /// </summary>
+        public E_Result MoveAll(Dimension[] dimensions, double[] speed, double[] position, int timeout = -1)
+        {
+            if (dimensions == null || speed == null || position == null ||
+                dimensions.Length == 0 ||
+                dimensions.Length != speed.Length || dimensions.Length != position.Length)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            double[] currentPosition = new double[dimensions.Length];
+            int[] timeoutArray = new int[dimensions.Length];
+
+            for (int i = 0; i < dimensions.Length; i++)
+            {
+                if (speed[i] <= 0)
+                {
+                    return E_Result.E_INVALID_ARGUMENT;
+                }
+
+                E_Result positionResult = GetPosition(dimensions[i], out currentPosition[i]);
+                if (positionResult != E_Result.E_SUCCESS)
+                {
+                    return positionResult;
+                }
+            }
+
+            for (int i = 0; i < dimensions.Length; i++)
+            {
+                E_Result result = motionControl.MotorAbsolute(dimensions[i], speed[i], position[i]);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    StopStartedAxes(dimensions, i, isHome: false);
+                    return result;
+                }
+
+                Thread.Sleep(100);
+            }
+
+            for (int i = 0; i < dimensions.Length; i++)
+            {
+                timeoutArray[i] = CalculateTimeout(dimensions[i], timeout, speed[i], Math.Abs(position[i] - currentPosition[i]));
+            }
+
+            E_Result waitResult = motionControl.BlockingQuery(dimensions, timeoutArray.Max());
+            if (waitResult != E_Result.E_SUCCESS)
+            {
+                StopStartedAxes(dimensions, dimensions.Length, isHome: false);
+            }
+
+            return waitResult;
+        }
+
+        /// <summary>
         /// 轮询阻塞查询
         /// </summary>
         /// <param name="dimension">维度</param>
@@ -416,22 +645,219 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result BlockingQuery(Dimension dimension, int timeout)
         {
-            int block_timeout = 0;
-            while (timeout > block_timeout)
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            bool observedRunning = false;
+
+            while (stopwatch.ElapsedMilliseconds <= timeout)
             {
-                Axis axis = motionControl.MotorGetStatus(dimension);
-                bool result = false;
+                E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
 
-                result = axis.IsRunning;
+                if (IsMotionFault(axis))
+                {
+                    return E_Result.E_FAILED;
+                }
 
-                SpinWait.SpinUntil(() => !result, 1000); // 延时1s
-                if (!result)
+                if (axis.IsRunning)
+                {
+                    observedRunning = true;
+                }
+                else if (observedRunning)
+                {
+                    return axis.IsArrive ? E_Result.E_SUCCESS : E_Result.E_FAILED;
+                }
+                else if (stopwatch.ElapsedMilliseconds >= StartGraceMs)
+                {
+                    return axis.IsArrive ? E_Result.E_SUCCESS : E_Result.E_FAILED;
+                }
+
+                Thread.Sleep(PollIntervalMs);
+            }
+            return E_Result.E_TIMEOUT;
+        }
+
+        private E_Result BlockingJogQuery(Dimension dimension, int timeout)
+        {
+            if (timeout < 0)
+            {
+                return E_Result.E_SUCCESS;
+            }
+
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            bool observedRunning = false;
+
+            while (stopwatch.ElapsedMilliseconds <= timeout)
+            {
+                E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                if (IsMotionFault(axis))
+                {
+                    return E_Result.E_FAILED;
+                }
+
+                if (axis.IsRunning)
+                {
+                    observedRunning = true;
+                }
+                else if (observedRunning)
                 {
                     return E_Result.E_SUCCESS;
                 }
-                block_timeout = block_timeout + 1000;
+                else if (stopwatch.ElapsedMilliseconds >= StartGraceMs)
+                {
+                    return E_Result.E_FAILED;
+                }
+
+                Thread.Sleep(PollIntervalMs);
             }
+
             return E_Result.E_TIMEOUT;
+        }
+
+        private E_Result BlockingHomeQuery(Dimension dimension, int timeout)
+        {
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            bool observedHomeRunning = false;
+
+            while (stopwatch.ElapsedMilliseconds <= timeout)
+            {
+                E_Result result = motionControl.TryMotorHomeStatus(dimension, out short homeStatus);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                HomeWaitState homeResult = EvaluateHomeStatus(homeStatus, ref observedHomeRunning);
+                if (homeResult == HomeWaitState.Done)
+                {
+                    return E_Result.E_SUCCESS;
+                }
+
+                if (homeResult == HomeWaitState.Failed)
+                {
+                    return E_Result.E_FAILED;
+                }
+
+                if (!observedHomeRunning && stopwatch.ElapsedMilliseconds >= StartGraceMs)
+                {
+                    return E_Result.E_FAILED;
+                }
+
+                Thread.Sleep(PollIntervalMs);
+            }
+
+            return E_Result.E_TIMEOUT;
+        }
+
+        private E_Result BlockingHomeQuery(Dimension[] dimensions, int timeout)
+        {
+            if (dimensions == null || dimensions.Length == 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            bool[] observedHomeRunning = new bool[dimensions.Length];
+
+            while (stopwatch.ElapsedMilliseconds <= timeout)
+            {
+                bool allDone = true;
+
+                for (int i = 0; i < dimensions.Length; i++)
+                {
+                    E_Result result = motionControl.TryMotorHomeStatus(dimensions[i], out short homeStatus);
+                    if (result != E_Result.E_SUCCESS)
+                    {
+                        return result;
+                    }
+
+                    HomeWaitState homeResult = EvaluateHomeStatus(homeStatus, ref observedHomeRunning[i]);
+                    if (homeResult == HomeWaitState.Failed)
+                    {
+                        return E_Result.E_FAILED;
+                    }
+
+                    if (homeResult != HomeWaitState.Done)
+                    {
+                        allDone = false;
+                    }
+                }
+
+                if (allDone)
+                {
+                    return E_Result.E_SUCCESS;
+                }
+
+                if (stopwatch.ElapsedMilliseconds >= StartGraceMs)
+                {
+                    for (int i = 0; i < observedHomeRunning.Length; i++)
+                    {
+                        if (!observedHomeRunning[i])
+                        {
+                            return E_Result.E_FAILED;
+                        }
+                    }
+                }
+
+                Thread.Sleep(PollIntervalMs);
+            }
+
+            return E_Result.E_TIMEOUT;
+        }
+
+        private enum HomeWaitState
+        {
+            Waiting,
+            Done,
+            Failed
+        }
+
+        private static HomeWaitState EvaluateHomeStatus(short homeStatus, ref bool observedHomeRunning)
+        {
+            if ((homeStatus & 2) != 0)
+            {
+                return HomeWaitState.Done;
+            }
+
+            if ((homeStatus & (4 | 8 | 16)) != 0)
+            {
+                return HomeWaitState.Failed;
+            }
+
+            if ((homeStatus & 1) != 0)
+            {
+                observedHomeRunning = true;
+            }
+
+            return HomeWaitState.Waiting;
+        }
+
+        private static bool IsMotionFault(Axis axis)
+        {
+            return axis.IsAlarming ||
+                   axis.IsError ||
+                   (axis.NegArrived && axis.IsNegLmtActived) ||
+                   (axis.PosArrived && axis.IsPosLmtActived);
+        }
+
+        private void StopStartedAxes(Dimension[] dimensions, int startedCount, bool isHome)
+        {
+            for (int i = 0; i < startedCount; i++)
+            {
+                if (isHome)
+                {
+                    motionControl.MotorHomeStop(dimensions[i]);
+                }
+
+                motionControl.MotorStop(dimensions[i]);
+            }
         }
 
 
@@ -445,11 +871,18 @@ namespace PVZ104
         /// <returns></returns>
         private int CalculateTimeout(Dimension dimension, int inputTimeout, double speed, double position = 440)
         {
-            int timeout = 0;
-            // 内置计算每次执行运动操作时，Timeout的时间
-            timeout = (int)(position / speed + 10) * 1000;
-            // 输入Timeout与内置进行比较，输出较大值。
-            return Math.Max(timeout, inputTimeout);
+            if (speed <= 0)
+            {
+                return DefaultMoveTimeoutMs;
+            }
+
+            double seconds = Math.Abs(position) / speed + 10;
+            int calculatedTimeout = seconds >= int.MaxValue / 1000.0
+                ? int.MaxValue
+                : (int)Math.Ceiling(seconds * 1000);
+
+            // 外部 timeout 只能延长等待时间，不能短于内部估算的安全时间。
+            return inputTimeout < 0 ? calculatedTimeout : Math.Max(calculatedTimeout, inputTimeout);
         }
     }
 }

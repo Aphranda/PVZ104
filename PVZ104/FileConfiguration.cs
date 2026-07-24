@@ -11,8 +11,8 @@ namespace PVZ104
 {
     public class FileConfiguration
     {
-        private string relinipath = System.IO.Directory.GetCurrentDirectory() + "\\runparam.ini";//程序运行目录
-        private string axisConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "axisconfig.ini");
+        private readonly string relinipath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runparam.ini");
+        private readonly string axisConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "axisconfig.ini");
         IniHelper iniHelper = new IniHelper();
 
         public FileConfiguration()
@@ -57,17 +57,18 @@ namespace PVZ104
         {
             MotionPara motionPara = new MotionPara();
             motionPara.AxisNumber = axishandle;
-            motionPara.Pos = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "POS"));
-            motionPara.Vel = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "VEL"));
-            motionPara.Acc = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "ACC"));
-            motionPara.Dec = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "DEC"));
-            motionPara.Mode = Convert.ToInt32(iniHelper.IniReadValue(axishandle.ToString(), "MODE"));
-            motionPara.Scale = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "SCALE"));
-            motionPara.JumpVel = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "JUMPVEL"));
-            motionPara.EndVel = Convert.ToDouble(iniHelper.IniReadValue(axishandle.ToString(), "ENDVEL"));
-            motionPara.ZeroPos = Convert.ToInt32(iniHelper.IniReadValue(axishandle.ToString(), "ZEROPOS"));
-            motionPara.Smoth = Convert.ToInt32(iniHelper.IniReadValue(axishandle.ToString(), "SMOTH"));
-            motionPara.Direction = Convert.ToBoolean(iniHelper.IniReadValue(axishandle.ToString(), "DIRECTION"));
+            string section = axishandle.ToString();
+            motionPara.Pos = ReadDouble(iniHelper, section, "POS", motionPara.Pos);
+            motionPara.Vel = ReadDouble(iniHelper, section, "VEL", motionPara.Vel);
+            motionPara.Acc = ReadDouble(iniHelper, section, "ACC", motionPara.Acc);
+            motionPara.Dec = ReadDouble(iniHelper, section, "DEC", motionPara.Dec);
+            motionPara.Mode = ReadInt(iniHelper, section, "MODE", motionPara.Mode);
+            motionPara.Scale = ReadDouble(iniHelper, section, "SCALE", motionPara.Scale);
+            motionPara.JumpVel = ReadDouble(iniHelper, section, "JUMPVEL", motionPara.JumpVel);
+            motionPara.EndVel = ReadDouble(iniHelper, section, "ENDVEL", motionPara.EndVel);
+            motionPara.ZeroPos = ReadInt(iniHelper, section, "ZEROPOS", motionPara.ZeroPos);
+            motionPara.Smoth = ReadDouble(iniHelper, section, "SMOTH", motionPara.Smoth);
+            motionPara.Direction = ReadBool(iniHelper, section, "DIRECTION", motionPara.Direction);
             return motionPara;
         }
 
@@ -84,11 +85,11 @@ namespace PVZ104
 
             for (int i = 0; i < comPos.Length; i++)
             {
-                comData[i] = Convert.ToInt16(comPos[i]);
+                comData[i] = ReadInt16(comPos[i], 0);
             }
             for (int i = comPosLen; i < comPosLen + comNegLen; i++)
             {
-                comData[i] = Convert.ToInt16(comNeg[i - comPosLen]);
+                comData[i] = ReadInt16(comNeg[i - comPosLen], 0);
             }
             return comData;
         }
@@ -183,6 +184,33 @@ namespace PVZ104
             if (value == "0")
             {
                 return false;
+            }
+            return fallback;
+        }
+
+        private int ReadInt(IniHelper ini, string section, string key, int fallback)
+        {
+            string value = ini.IniReadValue(section, key);
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int result))
+            {
+                return result;
+            }
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out result))
+            {
+                return result;
+            }
+            return fallback;
+        }
+
+        private short ReadInt16(string value, short fallback)
+        {
+            if (short.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out short result))
+            {
+                return result;
+            }
+            if (short.TryParse(value, NumberStyles.Integer, CultureInfo.CurrentCulture, out result))
+            {
+                return result;
             }
             return fallback;
         }

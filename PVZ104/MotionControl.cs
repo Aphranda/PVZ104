@@ -19,18 +19,45 @@ namespace PVZ104
         Axis[] ax = new Axis[8];               // 定义8轴配置
         MotionPara[] mp = new MotionPara[8];   // 定义8轴参数
         HomePara[] hp = new HomePara[8];        // 定义8轴回零参数
+        private readonly int[] axisAlarmIds = new int[8];
 
         //句柄定义
         private ushort DevHandle = 0;           // 定义控制器句柄
-        private int currentAxis = 0;            // 定义当前轴index
         private ushort[] axisHandle;            // 可控制单轴参数配置
-        private ushort AxisCurrentHandle = 0;   // 定义当前轴句柄
 
         object obj = new object();              // 定义线程锁
 
         bool isConnected = false;               // 定义连接状态
         
         FileConfiguration FileConfiguration = new FileConfiguration();
+
+        public MotionConnectionDiagnostic LastConnectionDiagnostic { get; private set; } = MotionConnectionDiagnostic.Empty;
+
+        public bool IsConnected
+        {
+            get { return isConnected; }
+        }
+
+        public bool IsInitialized
+        {
+            get
+            {
+                if (axisHandle == null || axisHandle.Length == 0)
+                {
+                    return false;
+                }
+
+                for (int i = 0; i < axisHandle.Length; i++)
+                {
+                    if (axisHandle[i] != 0)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>
         /// 初始化轴参数
@@ -46,34 +73,232 @@ namespace PVZ104
             }
         }
 
+        private bool TryGetAxisIndex(Dimension dimension, out int axisIndex)
+        {
+            axisIndex = (int)dimension;
+            return axisIndex >= 0 && axisIndex < ax.Length && axisIndex < mp.Length;
+        }
+
+        private bool TryGetAxisHandle(Dimension dimension, out int axisIndex, out ushort axisCurrentHandle)
+        {
+            axisCurrentHandle = 0;
+            if (!TryGetAxisIndex(dimension, out axisIndex))
+            {
+                return false;
+            }
+
+            axisCurrentHandle = ax[axisIndex].AxisHandle;
+            return axisCurrentHandle != 0;
+        }
+
+        private void ClearAllAlarmIds()
+        {
+            Array.Clear(axisAlarmIds, 0, axisAlarmIds.Length);
+            alarmId = 0;
+        }
+
+        private int GetStoredAxisAlarmId(Dimension dimension)
+        {
+            if (!TryGetAxisIndex(dimension, out int axisIndex))
+            {
+                return alarmId;
+            }
+
+            return axisAlarmIds[axisIndex];
+        }
+
+        private void SetAxisAlarm(Dimension dimension, MotionAlarmFlags flag, bool enabled)
+        {
+            if (!TryGetAxisIndex(dimension, out int axisIndex))
+            {
+                return;
+            }
+
+            if (enabled)
+            {
+                axisAlarmIds[axisIndex] |= (int)flag;
+            }
+            else
+            {
+                axisAlarmIds[axisIndex] &= ~(int)flag;
+            }
+
+            alarmId = axisAlarmIds[axisIndex];
+        }
+
+        private int PublishAxisAlarmId(Dimension dimension, int value)
+        {
+            if (TryGetAxisIndex(dimension, out int axisIndex))
+            {
+                axisAlarmIds[axisIndex] = value;
+            }
+
+            alarmId = value;
+            return value;
+        }
+
+        internal int BuildStatusAlarmId(Dimension dimension, Axis axis)
+        {
+            int current = GetStoredAxisAlarmId(dimension);
+
+            if (axis.IsConnected)
+            {
+                current &= ~(int)MotionAlarmFlags.NotConnected;
+            }
+            else
+            {
+                current |= (int)MotionAlarmFlags.NotConnected;
+            }
+
+            if (axis.IsAlarming)
+            {
+                current |= (int)MotionAlarmFlags.Driver;
+            }
+            else
+            {
+                current &= ~(int)MotionAlarmFlags.Driver;
+            }
+
+            bool limitAlarm = (axis.NegArrived && axis.IsNegLmtActived) || (axis.PosArrived && axis.IsPosLmtActived);
+            if (limitAlarm)
+            {
+                current |= (int)MotionAlarmFlags.Limit;
+            }
+            else
+            {
+                current &= ~(int)MotionAlarmFlags.Limit;
+            }
+
+            return PublishAxisAlarmId(dimension, current);
+        }
+
+        internal int BuildDisconnectedAlarmId(Dimension dimension)
+        {
+            return PublishAxisAlarmId(dimension, GetStoredAxisAlarmId(dimension) | (int)MotionAlarmFlags.NotConnected);
+        }
+
         /// <summary>
         /// 连接运动控制卡
         /// </summary>
         /// <returns>连接状态</returns>
         public E_Result CardConnect(byte[] ipv4)
         {
-            short rtn = 0;
-            ushort devNum = 0; // 当前板卡可控轴数量
-            byte[] devInfo = new byte[4 * 84]; // 当前板卡相关信息-设备序号，识别字符串，描述符，板卡ID
-            rtn = CNMCLib20.NMC_DevSearch(CNMCLib20.TSearchMode.Ethernet, ref devNum, devInfo);
-            if (rtn == 0 && devNum > 0)
+            if (ipv4 == null || ipv4.Length != 4)
             {
-                // 打开控制器, 并获取全局句柄Devhandle
+                LastConnectionDiagnostic = new MotionConnectionDiagnostic(
+                    ipv4,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "IPv4 参数无效");
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            short rtn = 0;
+            if (isConnected)
+            {
+                LastConnectionDiagnostic = new MotionConnectionDiagnostic(
+                    ipv4,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "设备已连接");
+                return E_Result.E_ALREADY_CONNECTED;
+            }
+
+            short? openByIpRtn = null;
+            short? searchRtn = null;
+            ushort? searchDevNum = null;
+            short? openBySearchRtn = null;
+            short? nativeLastError = null;
+            string diagnosticMessage;
+
+            try
+            {
+                // 指定IP连接时不依赖广播搜索结果。多IP/多网段网卡下，厂家搜索接口可能搜不到设备。
                 rtn = CNMCLib20.NMC_DevOpenByIP(ipv4, ref DevHandle);
-                if (rtn != 0)
+                openByIpRtn = rtn;
+                if (rtn == 0)
                 {
-                    rtn = CNMCLib20.NMC_DevOpen(0, ref DevHandle);
+                    diagnosticMessage = "指定 IP 连接成功";
                 }
-                if (rtn != 0)
+                else
                 {
-                    return _Result(rtn == 0);
+                    nativeLastError = TryGetLastNativeError();
+
+                    ushort devNum = 0; // 当前板卡可控轴数量
+                    byte[] devInfo = new byte[4 * 84]; // 当前板卡相关信息-设备序号，识别字符串，描述符，板卡ID
+                    short currentSearchRtn = CNMCLib20.NMC_DevSearch(CNMCLib20.TSearchMode.Ethernet, ref devNum, devInfo);
+                    searchRtn = currentSearchRtn;
+                    searchDevNum = devNum;
+                    if (currentSearchRtn == 0 && devNum > 0)
+                    {
+                        rtn = CNMCLib20.NMC_DevOpen(0, ref DevHandle);
+                        openBySearchRtn = rtn;
+                        if (rtn == 0)
+                        {
+                            if (!TryReadDeviceIPv4(DevHandle, out byte[] openedIPv4))
+                            {
+                                CloseDeviceHandle();
+                                rtn = -1;
+                                diagnosticMessage = "指定 IP 失败，搜索兜底已打开设备，但无法读取设备 IP";
+                            }
+                            else if (!IsSameIPv4(ipv4, openedIPv4))
+                            {
+                                CloseDeviceHandle();
+                                rtn = -1;
+                                diagnosticMessage = "指定 IP 失败，搜索兜底打开到非目标 IP：" + FormatIPv4(openedIPv4);
+                            }
+                            else
+                            {
+                                diagnosticMessage = "指定 IP 失败，搜索兜底连接到目标 IP";
+                            }
+                        }
+                        else
+                        {
+                            diagnosticMessage = "指定 IP 和搜索兜底打开均失败";
+                        }
+                    }
+                    else
+                    {
+                        diagnosticMessage = currentSearchRtn == 0 ? "指定 IP 失败，搜索未发现设备" : "指定 IP 失败，搜索接口调用失败";
+                    }
+
+                    if (rtn != 0)
+                    {
+                        nativeLastError = TryGetLastNativeError();
+                    }
                 }
             }
-            // 改变连接状态
-            isConnected = true;
+            catch (Exception ex) when (ex is DllNotFoundException || ex is BadImageFormatException || ex is EntryPointNotFoundException)
+            {
+                isConnected = false;
+                LastConnectionDiagnostic = new MotionConnectionDiagnostic(
+                    ipv4,
+                    openByIpRtn,
+                    searchRtn,
+                    searchDevNum,
+                    openBySearchRtn,
+                    nativeLastError,
+                    ex.GetType().Name + ": " + ex.Message);
+                return E_Result.E_FAILED;
+            }
 
-            // 返回连接状态
-            return _Result(rtn == 0);
+            isConnected = rtn == 0;
+            LastConnectionDiagnostic = new MotionConnectionDiagnostic(
+                ipv4,
+                openByIpRtn,
+                searchRtn,
+                searchDevNum,
+                openBySearchRtn,
+                nativeLastError,
+                diagnosticMessage);
+
+            return _Result(isConnected);
         }
 
         /// <summary>
@@ -87,9 +312,12 @@ namespace PVZ104
             // 判断是否已经连接，关闭连接并改变连接状态
             if (isConnected)
             {
+                short axisCloseRtn = CloseAxisHandles();
                 rtn = CNMCLib20.NMC_DevClose(ref DevHandle);
                 isConnected = false;
-                return _Result(rtn == 0);
+                DevHandle = 0;
+                ClearRuntimeState();
+                return _Result(axisCloseRtn == 0 && rtn == 0);
             }
             else
             {
@@ -104,13 +332,22 @@ namespace PVZ104
         /// <returns>初始化状态</returns>
         public E_Result CardInitial()
         {
-            alarmId = 0;
+            if (!isConnected)
+            {
+                return E_Result.E_ALREADY_DISCONNECTED;
+            }
+
+            ClearAllAlarmIds();
             short rtn = 0;
 
             CNMCLib20.TDevResourceInfo devInformation = new CNMCLib20.TDevResourceInfo();
 
             //获取控制器信息
             rtn = CNMCLib20.NMC_GetCardInfo(DevHandle, ref devInformation);
+            if (rtn != 0)
+            {
+                return E_Result.E_FAILED;
+            }
 
             //获取轴号  
             NUM = devInformation.axisNum;
@@ -123,14 +360,22 @@ namespace PVZ104
             {
                 NUM = 8;
             }
-            axisHandle = new ushort[NUM];
+
+            NUM = Math.Min(NUM, ax.Length);
+            CloseAxisHandles();
+            ushort[] openedAxisHandles = new ushort[NUM];
 
             // 开启单轴，并输出可控轴列表 257-264八轴控制。
             for (int i = 0; i < NUM; i++)
             {
-                rtn = CNMCLib20.NMC_MtOpen(DevHandle, (short)i, ref axisHandle[i]);
+                rtn = CNMCLib20.NMC_MtOpen(DevHandle, (short)i, ref openedAxisHandles[i]);
+                if (rtn != 0 || openedAxisHandles[i] == 0)
+                {
+                    return E_Result.E_FAILED;
+                }
             }
 
+            axisHandle = openedAxisHandles;
 
             //读取默认运动参数
             for (int i = 0; i < NUM; i++)
@@ -163,11 +408,15 @@ namespace PVZ104
             }
 
 
-            AxisPara axisPara = new AxisPara();
-            // SetAxisPara(Dimension.Axis01, axisPara);
-            SetAxisPara(Dimension.Axis02, axisPara);
-            SetAxisPara(Dimension.Axis03, axisPara);
-            return _Result(rtn == 0);
+            for (int i = 0; i < NUM; i++)
+            {
+                if (SetAxisPara((Dimension)i, BuildAxisPara(i)) != 0)
+                {
+                    return E_Result.E_FAILED;
+                }
+            }
+
+            return E_Result.E_SUCCESS;
         }
 
         /// <summary>
@@ -184,7 +433,7 @@ namespace PVZ104
             }
             else
             {
-                return _Result(rtn == 0);
+                return E_Result.E_ALREADY_DISCONNECTED;
             }
         }
 
@@ -195,8 +444,12 @@ namespace PVZ104
         public E_Result ClearError(Dimension dimension)
         {
             short rtn = 0;
-            AxisCurrentHandle = ax[(int)dimension].AxisHandle;
-            rtn = CNMCLib20.NMC_MtClrError(AxisCurrentHandle);
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            rtn = CNMCLib20.NMC_MtClrError(axisCurrentHandle);
             return _Result(rtn == 0);
         }
 
@@ -208,18 +461,22 @@ namespace PVZ104
         public E_Result ServoEnable(Dimension dimension, bool Enable)
         {
             short rtn = 0;
-            AxisCurrentHandle = ax[(int)dimension].AxisHandle;
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             if (Enable)
             {
                 // 开启使能
-                rtn = CNMCLib20.NMC_MtSetSvOn(AxisCurrentHandle);
+                rtn = CNMCLib20.NMC_MtSetSvOn(axisCurrentHandle);
                 ClearError(dimension);
                 return _Result(rtn == 0);
             }
             else
             {
                 // 关闭使能
-                rtn = CNMCLib20.NMC_MtSetSvOff(AxisCurrentHandle);
+                rtn = CNMCLib20.NMC_MtSetSvOff(axisCurrentHandle);
                 return _Result(rtn == 0);
             }
 
@@ -235,11 +492,10 @@ namespace PVZ104
         public E_Result MotorHome(Dimension dimension, double speed, double offset)
         {
             short rtn = 0;
-            // 以dimension定义当前使用轴index
-            currentAxis = (int)dimension;
-
-            // 获取当前轴句柄
-            AxisCurrentHandle = ax[currentAxis].AxisHandle;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 实例化原点复位参数
             HomePara homePara = new HomePara();
@@ -283,21 +539,21 @@ namespace PVZ104
             homepara.reserved2 = 0;
 
 
-            rtn = CNMCLib20.NMC_MtSetHomePara(ax[currentAxis].AxisHandle, ref homepara);
+            rtn = CNMCLib20.NMC_MtSetHomePara(axisCurrentHandle, ref homepara);
             if (rtn != 0)
             {
                 // 回零参数错误
-                alarmId = alarmId | 1024;
+                SetAxisAlarm(dimension, MotionAlarmFlags.Home, true);
                 return E_Result.E_FAILED;
             }
-            rtn = CNMCLib20.NMC_MtHome(ax[currentAxis].AxisHandle);
+            rtn = CNMCLib20.NMC_MtHome(axisCurrentHandle);
             if (rtn != 0)
             {
                 // 回零启动失败
-                alarmId = alarmId | 1024;
+                SetAxisAlarm(dimension, MotionAlarmFlags.Home, true);
                 return E_Result.E_FAILED;
             }
-            alarmId = alarmId & -1025;
+            SetAxisAlarm(dimension, MotionAlarmFlags.Home, false);
             return E_Result.E_SUCCESS;
         }
 
@@ -308,13 +564,26 @@ namespace PVZ104
         /// <returns>0: 回零停止 1:回零中，2：回零成功，4：回零失败，8：回零参数，16 开关失效</returns>
         public short MotorHomeStatus(Dimension dimension)
         {
-            short homests = 0;
-            currentAxis = (int)dimension;
-            ushort homedle = ax[currentAxis].AxisHandle;
+            TryMotorHomeStatus(dimension, out short homests);
+            return homests;
+        }
+
+        public E_Result TryMotorHomeStatus(Dimension dimension, out short homests)
+        {
+            homests = 0;
+            if (!isConnected)
+            {
+                return E_Result.E_ALREADY_DISCONNECTED;
+            }
+
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 获取原点复位状态
-            CNMCLib20.NMC_MtGetHomeSts(homedle, ref homests);
-            return homests;
+            short rtn = CNMCLib20.NMC_MtGetHomeSts(axisCurrentHandle, ref homests);
+            return _Result(rtn == 0);
         }
 
         /// <summary>
@@ -325,11 +594,13 @@ namespace PVZ104
         public E_Result MotorHomeStop(Dimension dimension)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
-            ushort homedle = ax[currentAxis].AxisHandle;
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 停止原点复位
-            rtn = CNMCLib20.NMC_MtHomeStop(homedle);
+            rtn = CNMCLib20.NMC_MtHomeStop(axisCurrentHandle);
             return _Result(rtn == 0);
         }
 
@@ -341,9 +612,13 @@ namespace PVZ104
         public E_Result MotorZero(Dimension dimension)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             // 将当前位置进行清除
-            rtn = CNMCLib20.NMC_MtZeroPos(ax[currentAxis].AxisHandle);
+            rtn = CNMCLib20.NMC_MtZeroPos(axisCurrentHandle);
             return _Result(rtn == 0);
         }
 
@@ -356,7 +631,10 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result MotorJog(Dimension dimension, double speed, bool direction)
         {
-            currentAxis = (int)dimension;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 实例化运动配置
             // mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
@@ -374,7 +652,7 @@ namespace PVZ104
             if (mp[currentAxis].Mode == 0)
             {
                 //jog
-                rtn = CNMCLib20.NMC_MtSetPrfMode(ax[currentAxis].AxisHandle, CNMCLib20.MT_JOG_PRF_MODE);
+                rtn = CNMCLib20.NMC_MtSetPrfMode(axisCurrentHandle, CNMCLib20.MT_JOG_PRF_MODE);
                 if (rtn != 0)
                 {
                     // JOG运动模式设置失败
@@ -383,20 +661,20 @@ namespace PVZ104
                 jogPara.acc = mp[currentAxis].Acc * mp[currentAxis].Scale / 1000000;
                 jogPara.dec = mp[currentAxis].Dec * mp[currentAxis].Scale / 1000000;
                 jogPara.smoothCoef = ax[currentAxis].Smooth;
-                rtn = CNMCLib20.NMC_MtSetJogPara(ax[currentAxis].AxisHandle, ref jogPara);
+                rtn = CNMCLib20.NMC_MtSetJogPara(axisCurrentHandle, ref jogPara);
                 if (rtn != 0)
                 {
                     // JOG运动参数设置失败
                     return E_Result.E_FAILED;
                 }
-                rtn = CNMCLib20.NMC_MtSetVel(ax[currentAxis].AxisHandle, dirIndex * mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
+                rtn = CNMCLib20.NMC_MtSetVel(axisCurrentHandle, dirIndex * mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
 
                 if (rtn != 0)
                 {
                     // JOG运动的最高速度设置失败
                     return E_Result.E_FAILED;
                 }
-                rtn = CNMCLib20.NMC_MtUpdate(ax[currentAxis].AxisHandle);
+                rtn = CNMCLib20.NMC_MtUpdate(axisCurrentHandle);
                 if (rtn != 0)
                 {
                     // JOG启动失败
@@ -414,8 +692,12 @@ namespace PVZ104
         public E_Result MotorStop(Dimension dimension)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
-            rtn = CNMCLib20.NMC_MtStop(ax[currentAxis].AxisHandle);
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            rtn = CNMCLib20.NMC_MtStop(axisCurrentHandle);
             return _Result(rtn == 0);
         }
 
@@ -431,7 +713,10 @@ namespace PVZ104
             short rtn = 0;
             CNMCLib20.TPtpPara ptpPara;
 
-            currentAxis = (int)dimension;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 相对运动
             // 获取当前轴配置
@@ -449,10 +734,10 @@ namespace PVZ104
 
 
             // step1--设置模式
-            rtn = CNMCLib20.NMC_MtSetPrfMode(ax[currentAxis].AxisHandle, CNMCLib20.MT_PTP_PRF_MODE);
+            rtn = CNMCLib20.NMC_MtSetPrfMode(axisCurrentHandle, CNMCLib20.MT_PTP_PRF_MODE);
             if (rtn != 0)
             {
-                alarmId = alarmId | 4096;
+                SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, true);
                 // PTOP运动模式设置失败
                 return E_Result.E_FAILED;
             }
@@ -465,39 +750,39 @@ namespace PVZ104
             ptpPara.dummy1 = 0;
             ptpPara.dummy2 = 0;
             ptpPara.dummy3 = 0;
-            rtn = CNMCLib20.NMC_MtSetPtpPara(ax[currentAxis].AxisHandle, ref ptpPara);
+            rtn = CNMCLib20.NMC_MtSetPtpPara(axisCurrentHandle, ref ptpPara);
             if (rtn != 0)
             {
                 // PTOP运动参数设置失败;
-                alarmId = alarmId | 4096;
+                SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, true);
                 return E_Result.E_FAILED;
             }
             //step3--设置速度
-            rtn = CNMCLib20.NMC_MtSetVel(ax[currentAxis].AxisHandle, mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
+            rtn = CNMCLib20.NMC_MtSetVel(axisCurrentHandle, mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
             if (rtn != 0)
             {
                 // PTOP运动的最高速度设置失败;
-                alarmId = alarmId | 4096;
+                SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, true);
                 return E_Result.E_FAILED;
             }
             //step4--设置目标位置
-            rtn = CNMCLib20.NMC_MtSetPtpTgtPos(ax[currentAxis].AxisHandle, (int)(mp[currentAxis].Pos * mp[currentAxis].Scale + newpos));
+            rtn = CNMCLib20.NMC_MtSetPtpTgtPos(axisCurrentHandle, (int)(mp[currentAxis].Pos * mp[currentAxis].Scale + newpos));
 
             if (rtn != 0)
             {
                 // PTOP目标位置设置失败;
-                alarmId = alarmId | 4096;
+                SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, true);
                 return E_Result.E_FAILED;
             }
             //step5--启动运动
-            rtn = CNMCLib20.NMC_MtUpdate(ax[currentAxis].AxisHandle);
+            rtn = CNMCLib20.NMC_MtUpdate(axisCurrentHandle);
             if (rtn != 0)
             {
                 // PTOP启动失败;
-                alarmId = alarmId | 4096;
+                SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, true);
                 return E_Result.E_FAILED;
             }
-            alarmId = alarmId & -4097;
+            SetAxisAlarm(dimension, MotionAlarmFlags.RelativeMove, false);
             return E_Result.E_SUCCESS;
         }
 
@@ -511,7 +796,10 @@ namespace PVZ104
         public E_Result MotorAbsolute(Dimension dimension, double speed, double position)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
 
             // 获取当前轴配置
             // mp[currentAxis] = GetMotionPara(ax[currentAxis].AxisHandle);
@@ -524,11 +812,11 @@ namespace PVZ104
 
             //绝对运动
             //step1--设置模式
-            rtn = CNMCLib20.NMC_MtSetPrfMode(ax[currentAxis].AxisHandle, CNMCLib20.MT_PTP_PRF_MODE);
+            rtn = CNMCLib20.NMC_MtSetPrfMode(axisCurrentHandle, CNMCLib20.MT_PTP_PRF_MODE);
             if (rtn != 0)
             {
                 // PTOP运动模式设置失败;
-                alarmId = alarmId | 2048;
+                SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, true);
                 return E_Result.E_FAILED;
             }
             //step2--设置参数
@@ -541,38 +829,38 @@ namespace PVZ104
             ptpPara.dummy1 = 0;
             ptpPara.dummy2 = 0;
             ptpPara.dummy3 = 0;
-            rtn = CNMCLib20.NMC_MtSetPtpPara(ax[currentAxis].AxisHandle, ref ptpPara);
+            rtn = CNMCLib20.NMC_MtSetPtpPara(axisCurrentHandle, ref ptpPara);
             if (rtn != 0)
             {
                 // PTOP运动参数设置失败;
-                alarmId = alarmId | 2048;
+                SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, true);
                 return E_Result.E_FAILED;
             }
             //step3--设置速度
-            rtn = CNMCLib20.NMC_MtSetVel(ax[currentAxis].AxisHandle, mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
+            rtn = CNMCLib20.NMC_MtSetVel(axisCurrentHandle, mp[currentAxis].Vel * mp[currentAxis].Scale / 1000);
             if (rtn != 0)
             {
                 // PTOP运动的最高速度设置失败;
-                alarmId = alarmId | 2048;
+                SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, true);
                 return E_Result.E_FAILED;
             }
             //step4--设置目标位置
-            rtn = CNMCLib20.NMC_MtSetPtpTgtPos(ax[currentAxis].AxisHandle, (int)(mp[currentAxis].Pos * mp[currentAxis].Scale));
+            rtn = CNMCLib20.NMC_MtSetPtpTgtPos(axisCurrentHandle, (int)(mp[currentAxis].Pos * mp[currentAxis].Scale));
             if (rtn != 0)
             {
                 // PTOP目标位置设置失败;
-                alarmId = alarmId | 2048;
+                SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, true);
                 return E_Result.E_FAILED;
             }
             //step5--启动运动
-            rtn = CNMCLib20.NMC_MtUpdate(ax[currentAxis].AxisHandle);
+            rtn = CNMCLib20.NMC_MtUpdate(axisCurrentHandle);
             if (rtn != 0)
             {
                 // PTOP启动失败
-                alarmId = alarmId | 2048;
+                SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, true);
                 return E_Result.E_FAILED;
             }
-            alarmId = alarmId & -2049;
+            SetAxisAlarm(dimension, MotionAlarmFlags.AbsoluteMove, false);
             return E_Result.E_SUCCESS;
         }
 
@@ -586,8 +874,12 @@ namespace PVZ104
         public E_Result MotorCompensationPara(Dimension dimension, short[] comPos, short[] comNeg)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
-            rtn = CNMCLib20.NMC_MtSetLeadScrewCompPara(ax[currentAxis].AxisHandle, 360, 0, 360 * (int)mp[currentAxis].Scale, comPos, comNeg);
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            rtn = CNMCLib20.NMC_MtSetLeadScrewCompPara(axisCurrentHandle, 360, 0, 360 * (int)mp[currentAxis].Scale, comPos, comNeg);
             return _Result(rtn == 0);
         }
 
@@ -599,10 +891,14 @@ namespace PVZ104
         public E_Result MotorCompensationEnable(Dimension dimension, bool enable)
         {
             short rtn = 0;
-            currentAxis = (int)dimension;
+            if (!TryGetAxisHandle(dimension, out _, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             short sw = enable == true ? (short)1 : (short)0;
-            rtn = CNMCLib20.NMC_MtEnableLeadScrew(ax[currentAxis].AxisHandle, sw);
-            return E_Result.E_ToDo;
+            rtn = CNMCLib20.NMC_MtEnableLeadScrew(axisCurrentHandle, sw);
+            return _Result(rtn == 0);
         }
 
         /// <summary>
@@ -613,9 +909,19 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result MotorCompareHS2Para(Dimension dimension, int pulseWidth)
         {
+            if (!isConnected)
+            {
+                return E_Result.E_ALREADY_DISCONNECTED;
+            }
+
+            if (!TryGetAxisIndex(dimension, out int axisIndex) || pulseWidth <= 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             short rtn = 0;
             short group = 0;
-            short currentAxis = (short)dimension;
+            short currentAxis = (short)axisIndex;
 
             // 停止高速位置比较,以防止上次异常，没有关闭
             MotorCompareHS2Stop();
@@ -624,7 +930,7 @@ namespace PVZ104
             HS2ComparaPara comparaParaHS2 = new HS2ComparaPara();
 
             // 定义比较参数
-            CNMCLib20.TComp2DimensParamEx comp2DimensParamEx = new CNMCLib20.TComp2DimensParamEx();
+            CNMCLib20.TComp2DimensParamEx comp2DimensParamEx = new CNMCLib20.TComp2DimensParamEx(true);
             comp2DimensParamEx.dir1No = currentAxis;
             comp2DimensParamEx.dir2No = comparaParaHS2.Dir2No;
             comp2DimensParamEx.outputChn = comparaParaHS2.OutputChn;
@@ -659,7 +965,21 @@ namespace PVZ104
         /// <returns></returns>
         public E_Result MotorCompareHs2Data(Dimension dimension, double[] posRangleArray)
         {
-            currentAxis = (int)dimension;
+            if (!isConnected)
+            {
+                return E_Result.E_ALREADY_DISCONNECTED;
+            }
+
+            if (!TryGetAxisIndex(dimension, out int currentAxis))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            if (posRangleArray == null || posRangleArray.Length == 0 || posRangleArray.Length % 2 != 0)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
             int[] posArray = new int[posRangleArray.Length];
 
             for (int i = 0; i < posRangleArray.Length; i++)
@@ -754,43 +1074,51 @@ namespace PVZ104
         /// <returns></returns>
         public Axis MotorGetStatus(Dimension dimension)
         {
-            short rtn = 0;
-            currentAxis = (int)dimension;
-            Axis axis = GetAxisPara(DevHandle, ax[currentAxis].AxisHandle, mp[currentAxis].Scale, mp[currentAxis].Smoth);
-            int motionIOstatus = 256;
-            rtn = CNMCLib20.NMC_MtGetMotionIO(ax[currentAxis].AxisHandle, ref motionIOstatus);
-            if (rtn == 0)
+            TryMotorGetStatus(dimension, out Axis axis);
+            return axis;
+        }
+
+        public E_Result TryMotorGetStatus(Dimension dimension, out Axis axis)
+        {
+            axis = new Axis();
+            if (!isConnected)
             {
-                axis.IsConnected = true;
+                return E_Result.E_ALREADY_DISCONNECTED;
             }
-            string motionIObyte = Convert.ToString(motionIOstatus, 2).PadLeft(4, '0').Substring(5);
-            if (motionIObyte[0] == '1')
+
+            short rtn = 0;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            axis = GetAxisPara(DevHandle, axisCurrentHandle, mp[currentAxis].Scale, mp[currentAxis].Smoth, out short nativeReadRtn);
+            if (nativeReadRtn != 0)
+            {
+                return E_Result.E_FAILED;
+            }
+
+            int motionIOstatus = 256;
+            rtn = CNMCLib20.NMC_MtGetMotionIO(axisCurrentHandle, ref motionIOstatus);
+            if (rtn != 0)
+            {
+                return E_Result.E_FAILED;
+            }
+
+            axis.IsConnected = true;
+            if ((motionIOstatus & (1 << 8)) != 0)
             {
                 axis.IsAlarming = true;
-                alarmId = 32768;
             }
             else
             {
                 axis.IsAlarming = false;
-                alarmId = 0;
             }
-            if (motionIObyte[2] == '1')
-            {
-                axis.PosArrived = true;
-            }
-            else
-            {
-                axis.PosArrived = false;
-            }
-            if (motionIObyte[3] == '1')
-            {
-                axis.NegArrived = true;
-            }
-            else
-            {
-                axis.NegArrived = false;
-            }
-            return axis;
+
+            axis.PosArrived = (motionIOstatus & (1 << 6)) != 0;
+            axis.NegArrived = (motionIOstatus & (1 << 7)) != 0;
+            BuildStatusAlarmId(dimension, axis);
+            return E_Result.E_SUCCESS;
         }
 
 
@@ -804,8 +1132,14 @@ namespace PVZ104
         /// <returns>返回轴配置</returns>
         private Axis GetAxisPara(UInt16 devhandle, UInt16 axisHandle, double scale, double somthtime)
         {
+            return GetAxisPara(devhandle, axisHandle, scale, somthtime, out _);
+        }
+
+        private Axis GetAxisPara(UInt16 devhandle, UInt16 axisHandle, double scale, double somthtime, out short nativeReadRtn)
+        {
             lock (obj)
             {
+                nativeReadRtn = 0;
                 short rtn = 0;
                 short axsists = 0;
                 int postemp = 0;
@@ -828,24 +1162,30 @@ namespace PVZ104
                 temp.Scale = scaletemp;
                 //获取限位激活配置           
                 rtn = CNMCLib20.NMC_MtGetLmtOnOff(axisHandle, ref posswt, ref negswt);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsNegLmtActived = (negswt == 1) ? true : false;
                 temp.IsPosLmtActived = (posswt == 1) ? true : false;
                 //获取限位触发电平配置          
                 rtn = CNMCLib20.NMC_MtGetLmtSns(axisHandle, ref posswt, ref negswt);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsNeglmtDown = (negswt == 0) ? true : false;
                 temp.IsPoslmtDown = (posswt == 0) ? true : false;
                 //获取驱动器报警配置
                 rtn = CNMCLib20.NMC_MtGetAlarmOnOff(axisHandle, ref swt);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsAlarmActived = (swt == 1) ? true : false;
                 //获取驱动器报警的电平配置
                 rtn = CNMCLib20.NMC_MtGetAlarmSns(axisHandle, ref swt);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsAlarmDown = (swt == 0) ? true : false;
                 //获取脉冲模式
                 rtn = CNMCLib20.NMC_MtGetStepMode(axisHandle, ref swt, ref swt1);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsEncNeged = (swt == 1) ? true : false;
                 temp.StepMode = swt1;
                 //获取轴状态
                 rtn = CNMCLib20.NMC_MtGetSts(axisHandle, ref axsists);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 //取bit0,0静止,1运动
                 temp.IsRunning = (axsists & (1 << 0)) == 0 ? false : true;
                 //取bit1,位置到达,0,未到达,1到达
@@ -868,29 +1208,37 @@ namespace PVZ104
                 temp.IsPosErr = (axsists & (1 << 11)) == 0 ? false : true;
                 //获取轴当前位置,脉冲转换为mm
                 rtn = CNMCLib20.NMC_MtGetPrfPos(axisHandle, ref postemp);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.CurrentPos0 = postemp / scaletemp;
                 //获取轴当前编码器位置,脉冲转化为mm
                 rtn = CNMCLib20.NMC_MtGetAxisPos(axisHandle, ref postemp);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.CurrentPos1 = postemp / scaletemp;
                 //获取当前轴速度,mm/s
                 rtn = CNMCLib20.NMC_MtGetPrfVel(axisHandle, ref nowvel);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.CurrentVel = nowvel * 1000 / scaletemp;
                 //获取是否为低电平触发硬限位停止的配置   
                 //读取触发是否停止配置
                 rtn = CNMCLib20.NMC_MtGetLmtOnOff(axisHandle, ref posi, ref neg);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 //读取限位触发电平配置
                 rtn = CNMCLib20.NMC_MtGetLmtSns(axisHandle, ref posii, ref negg);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsPoslmtDown = (posi == 1 && posii == 0) == true ? true : false;
                 temp.IsNeglmtDown = (neg == 1 && negg == 0) == true ? true : false;
                 //获取软限位配置
                 //是否激活软限位
                 rtn = CNMCLib20.NMC_MtGetSwLmtOnOff(axisHandle, ref swt);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.IsSoftLmtActived = (swt == 1) ? true : false;
                 rtn = CNMCLib20.NMC_MtGetSwLmtValue(axisHandle, ref posiii, ref negggg);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.SafePoslmtPos = posiii / scaletemp;
                 temp.SafelNeglmtPos = negggg / scaletemp;
                 //读取轴运动安全参数
                 rtn = CNMCLib20.NMC_MtGetSafePara(axisHandle, ref safePara);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 //单位mm/s^2
                 temp.StopDec = safePara.estpDec * 1000 * 1000 / scaletemp;
                 //单位mm/s
@@ -901,9 +1249,11 @@ namespace PVZ104
                 temp.Smooth = somthtime;
                 //最大位置误差读取,单位脉冲
                 rtn = CNMCLib20.NMC_MtGetPosErrLmt(axisHandle, ref poserr);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.MaxPosErr = poserr;
                 //获取编码器计数方式，外部还是内部，以及计数方向
                 rtn = CNMCLib20.NMC_GetEncMode(devhandle, (short)axisHandle, ref encmode);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 switch (encmode)
                 {
                     case 0://外部编码器反馈，AB相90度差正
@@ -948,6 +1298,7 @@ namespace PVZ104
                 }
                 //读取回零参数
                 rtn = CNMCLib20.NMC_MtGetHomePara(axisHandle, ref homepara);
+                RememberNativeError(ref nativeReadRtn, rtn);
                 temp.HomeMaxPos = homepara.safeLen / scaletemp;
                 temp.HomeAcc = homepara.acc * 1000000 / scaletemp;
                 temp.SearchHomeVel = homepara.scan1stVel * 1000 / scaletemp;
@@ -955,10 +1306,10 @@ namespace PVZ104
                 temp.HomeBackVel = homepara.scan2ndVel * 1000 / scaletemp;//低速回零速度
                 temp.IsNegHome = (homepara.dir == 0) ? true : false;
                 temp.HomeMode = homepara.mode;
-                temp.IsHomeTwice = homepara.reScanEn == '1' ? true : false;
-                temp.IsZUp = homepara.zEdge == '1' ? true : false;
-                temp.IsLmtUp = homepara.lmtEdge == '1' ? true : false;
-                temp.IsHomeUp = homepara.homeEdge == '1' ? true : false;
+                temp.IsHomeTwice = homepara.reScanEn != 0;
+                temp.IsZUp = homepara.zEdge != 0;
+                temp.IsLmtUp = homepara.lmtEdge != 0;
+                temp.IsHomeUp = homepara.homeEdge != 0;
                 temp.HomeOffsetBegin = homepara.iniRetPos / scaletemp;
                 temp.HomeOffsetLmt = homepara.retSwOffset / scaletemp;
                 return temp;
@@ -973,52 +1324,56 @@ namespace PVZ104
         /// <returns></returns>
         private short SetAxisPara(Dimension dimension, AxisPara axisPara)
         {
-            AxisCurrentHandle = ax[(int)dimension].AxisHandle;
+            if (!TryGetAxisHandle(dimension, out int currentAxis, out ushort axisCurrentHandle))
+            {
+                return -1;
+            }
+
             int scale = (int)mp[currentAxis].Scale;
             CNMCLib20.TSafePara safePara;
             short rtn = 0;
             //正负限位激活
-            rtn = CNMCLib20.NMC_MtLmtOnOff(AxisCurrentHandle, axisPara.Poslmt, axisPara.Neglmt);
+            rtn = CNMCLib20.NMC_MtLmtOnOff(axisCurrentHandle, axisPara.Poslmt, axisPara.Neglmt);
             if (rtn != 0) return rtn;
             //正负限位电平配置
-            rtn = CNMCLib20.NMC_MtLmtSns(AxisCurrentHandle, axisPara.Poslmtlev, axisPara.Neglmtlev);
+            rtn = CNMCLib20.NMC_MtLmtSns(axisCurrentHandle, axisPara.Poslmtlev, axisPara.Neglmtlev);
             if (rtn != 0) return rtn;
             //报警激活
-            rtn = CNMCLib20.NMC_MtAlarmOnOff(AxisCurrentHandle, axisPara.AlarmEnable);
+            rtn = CNMCLib20.NMC_MtAlarmOnOff(axisCurrentHandle, axisPara.AlarmEnable);
             if (rtn != 0) return rtn;
             //报警电平配置
-            rtn = CNMCLib20.NMC_MtAlarmSns(AxisCurrentHandle, axisPara.AlarmLevel);
+            rtn = CNMCLib20.NMC_MtAlarmSns(axisCurrentHandle, axisPara.AlarmLevel);
             if (rtn != 0) return rtn;
             //指令脉冲取反激活,脉冲模式设置
-            rtn = CNMCLib20.NMC_MtSetStepMode(AxisCurrentHandle, axisPara.StepInv, axisPara.StepMode);
+            rtn = CNMCLib20.NMC_MtSetStepMode(axisCurrentHandle, axisPara.StepInv, axisPara.StepMode);
             if (rtn != 0) return rtn;
             //软限位是否激活
-            rtn = CNMCLib20.NMC_MtSwLmtOnOff(AxisCurrentHandle, axisPara.Softlmt);
+            rtn = CNMCLib20.NMC_MtSwLmtOnOff(axisCurrentHandle, axisPara.Softlmt);
             if (rtn != 0) return rtn;
             //软件限位设置
-            rtn = CNMCLib20.NMC_MtSwLmtValue(AxisCurrentHandle, (int)(axisPara.Softlmtpos * scale), (int)(axisPara.Softlmtneg * scale));
+            rtn = CNMCLib20.NMC_MtSwLmtValue(axisCurrentHandle, (int)(axisPara.Softlmtpos * scale), (int)(axisPara.Softlmtneg * scale));
             if (rtn != 0) return rtn;
 
             //运动安全参数设置
             safePara.estpDec = axisPara.EstpDec * scale / 1000000;
             safePara.maxAcc = axisPara.MaxAcc * scale / 1000000;
             safePara.maxVel = axisPara.MaxVel * scale / 1000;
-            rtn = CNMCLib20.NMC_MtSetSafePara(AxisCurrentHandle, ref safePara);
+            rtn = CNMCLib20.NMC_MtSetSafePara(axisCurrentHandle, ref safePara);
             if (rtn != 0) return rtn;
 
             //最大位置误差设定,单位脉冲
-            rtn = CNMCLib20.NMC_MtSetPosErrLmt(AxisCurrentHandle, axisPara.PosErr);
+            rtn = CNMCLib20.NMC_MtSetPosErrLmt(axisCurrentHandle, axisPara.PosErr);
             if (rtn != 0) return rtn;
 
             //平滑系数保存
             if (rtn != 0) return rtn;
-            ax[currentAxis].Smooth = Convert.ToDouble(axisPara.Smooth);
+            ax[currentAxis].Smooth = axisPara.Smooth;
 
             //轴当量保存 
             ax[currentAxis].Scale = axisPara.Scale;
 
             //编码器模式设置
-            rtn = CNMCLib20.NMC_SetEncMode(DevHandle, (short)AxisCurrentHandle, axisPara.Encoder);
+            rtn = CNMCLib20.NMC_SetEncMode(DevHandle, (short)axisCurrentHandle, axisPara.Encoder);
             return rtn;
         }
 
@@ -1032,6 +1387,109 @@ namespace PVZ104
             MotionPara motionPara = new MotionPara();
             motionPara.AxisNumber = axishandle;
             return motionPara;
+        }
+
+        private AxisPara BuildAxisPara(int axisIndex)
+        {
+            AxisPara axisPara = new AxisPara();
+            axisPara.Scale = mp[axisIndex].Scale;
+            axisPara.Smooth = mp[axisIndex].Smoth;
+            axisPara.Poslmtlev = ax[axisIndex].IsPoslmtDown ? (short)0 : (short)1;
+            axisPara.Neglmtlev = ax[axisIndex].IsNeglmtDown ? (short)0 : (short)1;
+            return axisPara;
+        }
+
+        private short CloseAxisHandles()
+        {
+            short firstError = 0;
+            if (axisHandle != null)
+            {
+                for (int i = 0; i < axisHandle.Length; i++)
+                {
+                    ushort currentHandle = axisHandle[i];
+                    if (currentHandle != 0)
+                    {
+                        short rtn = CNMCLib20.NMC_MtClose(ref currentHandle);
+                        if (firstError == 0 && rtn != 0)
+                        {
+                            firstError = rtn;
+                        }
+                    }
+
+                    axisHandle[i] = 0;
+                }
+            }
+
+            for (int i = 0; i < ax.Length; i++)
+            {
+                ax[i].AxisHandle = 0;
+                ax[i].IsConnected = false;
+            }
+
+            return firstError;
+        }
+
+        private void ClearRuntimeState()
+        {
+            axisHandle = null;
+            NUM = 0;
+            ipv4 = new byte[4];
+            ClearAllAlarmIds();
+        }
+
+        private void CloseDeviceHandle()
+        {
+            if (DevHandle != 0)
+            {
+                ushort handle = DevHandle;
+                CNMCLib20.NMC_DevClose(ref handle);
+                DevHandle = 0;
+            }
+        }
+
+        private bool TryReadDeviceIPv4(ushort devHandle, out byte[] openedIPv4)
+        {
+            openedIPv4 = null;
+            CNMCLib20.TDevResourceInfo devInformation = new CNMCLib20.TDevResourceInfo();
+            short rtn = CNMCLib20.NMC_GetCardInfo(devHandle, ref devInformation);
+            if (rtn != 0 || devInformation.ipv4 == null || devInformation.ipv4.Length < 4)
+            {
+                return false;
+            }
+
+            openedIPv4 = new byte[4];
+            Array.Copy(devInformation.ipv4, openedIPv4, openedIPv4.Length);
+            return true;
+        }
+
+        private static bool IsSameIPv4(byte[] left, byte[] right)
+        {
+            return left != null &&
+                   right != null &&
+                   left.Length >= 4 &&
+                   right.Length >= 4 &&
+                   left[0] == right[0] &&
+                   left[1] == right[1] &&
+                   left[2] == right[2] &&
+                   left[3] == right[3];
+        }
+
+        private static string FormatIPv4(byte[] address)
+        {
+            if (address == null || address.Length < 4)
+            {
+                return "<unknown>";
+            }
+
+            return string.Format("{0}.{1}.{2}.{3}", address[0], address[1], address[2], address[3]);
+        }
+
+        private static void RememberNativeError(ref short firstError, short currentRtn)
+        {
+            if (firstError == 0 && currentRtn != 0)
+            {
+                firstError = currentRtn;
+            }
         }
 
 
@@ -1052,27 +1510,78 @@ namespace PVZ104
             }
         }
 
+        private short? TryGetLastNativeError()
+        {
+            try
+            {
+                return CNMCLib20.NMC_GetLastErr();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
 
         // 多轴轮询
         public E_Result BlockingQuery(Dimension[] dimensions, int timeout)
         {
-            int block_timeout = 0;
-            while (timeout > block_timeout)
+            if (dimensions == null || dimensions.Length == 0)
             {
-                bool result = true;
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            bool[] observedRunning = new bool[dimensions.Length];
+
+            while (stopwatch.ElapsedMilliseconds <= timeout)
+            {
+                bool allStopped = true;
                 for (int i = 0; i < dimensions.Length; i++)
                 {
-                    Axis axis = MotorGetStatus(dimensions[i]);
-
-                    result = axis.IsRunning & result;
-
-                    SpinWait.SpinUntil(() => !result, 1000); // 延时1s
-                    if (!result)
+                    E_Result result = TryMotorGetStatus(dimensions[i], out Axis axis);
+                    if (result != E_Result.E_SUCCESS)
                     {
-                        return E_Result.E_SUCCESS;
+                        return result;
                     }
-                    block_timeout = block_timeout + 1000;
+
+                    bool activeLimit = (axis.NegArrived && axis.IsNegLmtActived) || (axis.PosArrived && axis.IsPosLmtActived);
+                    if (axis.IsAlarming || axis.IsError || activeLimit)
+                    {
+                        return E_Result.E_FAILED;
+                    }
+
+                    if (axis.IsRunning)
+                    {
+                        observedRunning[i] = true;
+                        allStopped = false;
+                    }
+                    else if (observedRunning[i])
+                    {
+                        if (!axis.IsArrive)
+                        {
+                            return E_Result.E_FAILED;
+                        }
+                    }
+                    else if (!observedRunning[i])
+                    {
+                        if (stopwatch.ElapsedMilliseconds < 500)
+                        {
+                            allStopped = false;
+                        }
+                        else if (!axis.IsArrive)
+                        {
+                            return E_Result.E_FAILED;
+                        }
+                    }
                 }
+
+                if (allStopped)
+                {
+                    return E_Result.E_SUCCESS;
+                }
+
+                Thread.Sleep(100);
             }
             return E_Result.E_TIMEOUT;
         }

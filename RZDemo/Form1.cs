@@ -59,30 +59,32 @@ namespace RZDemo
 
                 E_Result e_Result = AutoGC.Connect(ipv4);
 
-
-
-                AutoGC.Init(dimension, false, 5000);
-
                 if (e_Result == E_Result.E_SUCCESS)
                 {
+                    E_Result initResult = AutoGC.Init(dimension, false, 5000);
                     btn_signal.Text = "Conected";
                     btn_signal.BackColor = Color.DarkGreen;
                     TopMessage.AppendText("Connected\n");
+                    if (initResult != E_Result.E_SUCCESS)
+                    {
+                        TopMessage.AppendText($"Init Error: {initResult}\n");
+                    }
                     connect_flag = true;
                 }
                 else
                 {
                     btn_signal.Text = "Disconnect";
                     btn_signal.BackColor = Color.DarkRed;
+                    TopMessage.AppendText($"Connect Error: {e_Result}; {AutoGC.LastConnectionMessage}\n");
                     connect_flag = false;
                 }
                 
                 Getps(dimension);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
 
-                TopMessage.AppendText("Connect Error\n");
+                TopMessage.AppendText($"Connect Error: {ex.GetType().Name}: {ex.Message}\n");
             }
 
         }
@@ -387,7 +389,7 @@ namespace RZDemo
                         }
                         panel5.Enabled = connect_flag;
                     }), data);
-                    Task.Delay(100);
+                    System.Threading.Thread.Sleep(100);
                 }
             });
         }

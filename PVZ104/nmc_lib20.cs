@@ -19,7 +19,7 @@ namespace GC.Frame.Motion.Private
 {
     public class CNMCLib20
     {
-        public const string DLL_PATH = @"/nmc_lib20.dll";
+        public const string DLL_PATH = "nmc_lib20.dll";
 
 
         //----------------------------------------------------------
@@ -138,7 +138,7 @@ namespace GC.Frame.Motion.Private
         /// <param name="pDevHandle">返回设备操作句柄</param>
         /// <returns></returns>
         [DllImport(DLL_PATH, CallingConvention = CallingConvention.StdCall)]
-        public static extern Int16 NMC_DevOpenByIP([MarshalAs(UnmanagedType.LPArray, SizeConst = 1440)] byte[] pIPv4Array, ref UInt16 pDevHandle);
+        public static extern Int16 NMC_DevOpenByIP([MarshalAs(UnmanagedType.LPArray, SizeConst = 4)] byte[] pIPv4Array, ref UInt16 pDevHandle);
 
         /// <summary>
         /// 板卡关闭
@@ -5328,6 +5328,7 @@ namespace GC.Frame.Motion.Private
                 errZone = 0;
             }
         };
+        [StructLayout(LayoutKind.Sequential)]
         public struct TComp2DimensParamEx
         {
 
@@ -5343,7 +5344,25 @@ namespace GC.Frame.Motion.Private
             public short vibrateRange;                     // 抖动滤波范围	
             public int gateTime;                              // 脉冲方式脉冲时间,单位us
             public int minIntervalTime;                       // 最小触发时间间隔,单位us
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
             public int[] reserved;                           // 保留，默认值 0（不使用）
+
+            public TComp2DimensParamEx(bool init)
+            {
+                outputChn = 0;
+                outputType = 0;
+                chnType = 0;
+                dir1No = 0;
+                dir2No = 0;
+                posSrc = 0;
+                stLevel = 0;
+                errZone = 0;
+                directOutZone = 0;
+                vibrateRange = 0;
+                gateTime = 0;
+                minIntervalTime = 0;
+                reserved = new int[4];
+            }
         };
         /// <summary>
         /// 功能：设置2维位置比较的参数
