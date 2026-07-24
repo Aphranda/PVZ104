@@ -667,16 +667,32 @@ namespace PVZ104
                 }
                 else if (observedRunning)
                 {
-                    return axis.IsArrive ? E_Result.E_SUCCESS : E_Result.E_FAILED;
+                    return ValidatePtpCompletion(dimension, axis);
                 }
                 else if (stopwatch.ElapsedMilliseconds >= StartGraceMs)
                 {
-                    return axis.IsArrive ? E_Result.E_SUCCESS : E_Result.E_FAILED;
+                    return ValidatePtpCompletion(dimension, axis);
                 }
 
                 Thread.Sleep(PollIntervalMs);
             }
             return E_Result.E_TIMEOUT;
+        }
+
+        private E_Result ValidatePtpCompletion(Dimension dimension, Axis axis)
+        {
+            if (!axis.IsArrive)
+            {
+                return E_Result.E_FAILED;
+            }
+
+            E_Result result = motionControl.TryValidatePtpCompletion(dimension, axis, out bool isArrived);
+            if (result != E_Result.E_SUCCESS)
+            {
+                return result;
+            }
+
+            return isArrived ? E_Result.E_SUCCESS : E_Result.E_FAILED;
         }
 
         private E_Result BlockingJogQuery(Dimension dimension, int timeout)

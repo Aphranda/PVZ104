@@ -11,6 +11,7 @@ namespace PVZ104
         public double Scale { get; set; }
         public bool IsPosLmtDown { get; set; }
         public bool IsNegLmtDown { get; set; }
+        public short Encoder { get; set; }
 
         public string AxisName
         {
@@ -30,6 +31,11 @@ namespace PVZ104
                     "Scale",
                     string.Format("Axis01 脉冲当量必须在 {0}-{1} 范围内。", Axis01MinScale, Axis01MaxScale));
             }
+
+            if (Encoder < 0)
+            {
+                throw new ArgumentOutOfRangeException("Encoder", "编码器模式不能为负数。");
+            }
         }
 
         public AxisMechanicalConfig Clone()
@@ -40,6 +46,7 @@ namespace PVZ104
                 Scale = Scale,
                 IsPosLmtDown = IsPosLmtDown,
                 IsNegLmtDown = IsNegLmtDown,
+                Encoder = Encoder,
             };
         }
     }

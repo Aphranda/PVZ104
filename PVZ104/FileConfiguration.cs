@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization.Json;
 using System.Text;
 using System.IO;
-using System.Threading.Tasks;
 
 namespace PVZ104
 {
@@ -13,7 +13,10 @@ namespace PVZ104
     {
         private readonly string relinipath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runparam.ini");
         private readonly string axisConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "axisconfig.ini");
+        private readonly string motionModuleConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MotionModule.json");
         IniHelper iniHelper = new IniHelper();
+        private MotionModuleConfigRoot motionConfigRoot;
+        private MotionProjectConfig motionProjectConfig;
 
         public FileConfiguration()
         {
@@ -55,41 +58,46 @@ namespace PVZ104
         /// <returns></returns>
         public MotionPara GetMotionPara(ushort axishandle)
         {
+            int axisIndex = axishandle >= 257 ? axishandle - 257 : axishandle;
+            return GetMotionPara(axisIndex, axishandle);
+        }
+
+        public MotionPara GetMotionPara(int axisIndex, ushort axishandle)
+        {
             MotionPara motionPara = new MotionPara();
             motionPara.AxisNumber = axishandle;
-            string section = axishandle.ToString();
-            motionPara.Pos = ReadDouble(iniHelper, section, "POS", motionPara.Pos);
-            motionPara.Vel = ReadDouble(iniHelper, section, "VEL", motionPara.Vel);
-            motionPara.Acc = ReadDouble(iniHelper, section, "ACC", motionPara.Acc);
-            motionPara.Dec = ReadDouble(iniHelper, section, "DEC", motionPara.Dec);
-            motionPara.Mode = ReadInt(iniHelper, section, "MODE", motionPara.Mode);
-            motionPara.Scale = ReadDouble(iniHelper, section, "SCALE", motionPara.Scale);
-            motionPara.JumpVel = ReadDouble(iniHelper, section, "JUMPVEL", motionPara.JumpVel);
-            motionPara.EndVel = ReadDouble(iniHelper, section, "ENDVEL", motionPara.EndVel);
-            motionPara.ZeroPos = ReadInt(iniHelper, section, "ZEROPOS", motionPara.ZeroPos);
-            motionPara.Smoth = ReadDouble(iniHelper, section, "SMOTH", motionPara.Smoth);
-            motionPara.Direction = ReadBool(iniHelper, section, "DIRECTION", motionPara.Direction);
+            MotionAxisConfig axisConfig = GetAxisConfig(axisIndex);
+
+            motionPara.Scale = axisConfig.MotorBaseConfigure.Scale.Value;
+            motionPara.Smoth = axisConfig.MoveParameters.Smooth.Value;
+            motionPara.Acc = axisConfig.MoveParameters.Acc.Value;
+            motionPara.Dec = axisConfig.MoveParameters.Dec.Value;
+            motionPara.JumpVel = axisConfig.MoveParameters.StartVel.Value;
+            motionPara.EndVel = axisConfig.MoveParameters.EndVel.Value;
             return motionPara;
         }
 
         public short[] GetCompensationPara(ushort axishandle)
         {
+            int axisIndex = axishandle >= 257 ? axishandle - 257 : axishandle;
+            CompensationParametersConfigure compensation = GetCompensationParameters(axisIndex);
+            if (compensation == null || compensation.PCmpPos == null || compensation.NCmpPos == null)
+            {
+                throw new InvalidOperationException("MotionModule.json 缺少 axis" + (axisIndex + 1) + " compensation_parameters。");
+            }
 
-            string[] comPos = iniHelper.IniReadValue(axishandle.ToString(), "COMPOS").Split(',');
-            string[] comNeg = iniHelper.IniReadValue(axishandle.ToString(), "COMNEG").Split(',');
-
-            int comPosLen = comPos.Length;
-            int comNegLen = comNeg.Length;
+            int comPosLen = compensation.PCmpPos.Length;
+            int comNegLen = compensation.NCmpPos.Length;
 
             short[] comData = new short[comPosLen + comNegLen];
 
-            for (int i = 0; i < comPos.Length; i++)
+            for (int i = 0; i < compensation.PCmpPos.Length; i++)
             {
-                comData[i] = ReadInt16(comPos[i], 0);
+                comData[i] = compensation.PCmpPos[i];
             }
             for (int i = comPosLen; i < comPosLen + comNegLen; i++)
             {
-                comData[i] = ReadInt16(comNeg[i - comPosLen], 0);
+                comData[i] = compensation.NCmpPos[i - comPosLen];
             }
             return comData;
         }
@@ -98,61 +106,157 @@ namespace PVZ104
         {
             return new AxisMechanicalConfig[]
             {
-                new AxisMechanicalConfig { AxisIndex = 0, Scale = 18000, IsPosLmtDown = false, IsNegLmtDown = false },
-                new AxisMechanicalConfig { AxisIndex = 1, Scale = 252505, IsPosLmtDown = false, IsNegLmtDown = false },
-                new AxisMechanicalConfig { AxisIndex = 2, Scale = 30010.5, IsPosLmtDown = true, IsNegLmtDown = true },
-                new AxisMechanicalConfig { AxisIndex = 3, Scale = 20000, IsPosLmtDown = true, IsNegLmtDown = false },
+                new AxisMechanicalConfig { AxisIndex = 0, Scale = 18000, IsPosLmtDown = false, IsNegLmtDown = false, Encoder = 256 },
             };
         }
 
         public AxisMechanicalConfig[] GetAxisMechanicalConfigs(int count = 4)
         {
-            AxisMechanicalConfig[] defaults = GetDefaultAxisMechanicalConfigs();
-            if (!File.Exists(axisConfigPath))
+            if (count < 0)
             {
-                SaveAxisMechanicalConfigs(defaults);
-                return defaults.Take(count).Select(config => config.Clone()).ToArray();
+                throw new ArgumentOutOfRangeException("count", "轴数量不能为负数。");
             }
 
-            IniHelper ini = new IniHelper(axisConfigPath);
-            AxisMechanicalConfig[] configs = new AxisMechanicalConfig[count];
-            for (int i = 0; i < count; i++)
+            int configuredAxisCount = GetConfiguredAxisCount();
+            int actualCount = Math.Min(count, configuredAxisCount);
+            AxisMechanicalConfig[] configs = new AxisMechanicalConfig[actualCount];
+            for (int i = 0; i < actualCount; i++)
             {
-                AxisMechanicalConfig fallback = i < defaults.Length
-                    ? defaults[i]
-                    : new AxisMechanicalConfig { AxisIndex = i, Scale = 1, IsPosLmtDown = true, IsNegLmtDown = false };
-
-                string section = fallback.AxisName;
+                MotionAxisConfig axisConfig = GetAxisConfig(i);
                 configs[i] = new AxisMechanicalConfig
                 {
                     AxisIndex = i,
-                    Scale = ReadDouble(ini, section, "SCALE", fallback.Scale),
-                    IsPosLmtDown = ReadBool(ini, section, "POS_LMT_DOWN", fallback.IsPosLmtDown),
-                    IsNegLmtDown = ReadBool(ini, section, "NEG_LMT_DOWN", fallback.IsNegLmtDown),
+                    Scale = axisConfig.MotorBaseConfigure.Scale.Value,
+                    IsPosLmtDown = axisConfig.MotorBaseConfigure.PosLmtDown.Value,
+                    IsNegLmtDown = axisConfig.MotorBaseConfigure.NegLmtDown.Value,
+                    Encoder = axisConfig.MotorBaseConfigure.Encoder.Value,
                 };
 
-                try
-                {
-                    configs[i].Validate();
-                }
-                catch (ArgumentOutOfRangeException)
-                {
-                    configs[i] = fallback.Clone();
-                }
+                configs[i].Validate();
             }
 
             return configs;
         }
 
+        public HomePara GetHomePara(int axisIndex)
+        {
+            MotionAxisConfig axisConfig = GetAxisConfig(axisIndex);
+            HomeParametersConfigure home = axisConfig.HomeParameters;
+            return new HomePara
+            {
+                HomeMode = home.HomeMode.Value,
+                IsNegHome = home.Dir.Value == 0,
+                HomeAcc = home.Acc.Value,
+                SerchHomeVel = home.Scan1stVel.Value,
+                HomeBackVel = home.Scan2ndVel.Value,
+                IsHomeTwice = home.ReScanEn.Value != 0,
+                IsHomeUp = home.HomeEdge.Value != 0,
+                IsLmtUp = home.LmtEdge.Value != 0,
+                IsZUp = home.ZEdge.Value != 0,
+                HomeOffsetBegin = home.IniRetPos.Value,
+                HomeOffsetLmt = home.RetSwOffset.Value,
+                HomeMaxPos = home.SafeLen.Value,
+            };
+        }
+
+        public JogParametersConfigure GetJogParameters(int axisIndex)
+        {
+            return GetAxisConfig(axisIndex).JogParameters;
+        }
+
+        public TriggerParametersConfigure GetTriggerParameters(int axisIndex)
+        {
+            return GetAxisConfig(axisIndex).TriggerParameters;
+        }
+
+        public CompensationParametersConfigure GetCompensationParameters(int axisIndex)
+        {
+            return GetAxisConfig(axisIndex).CompensationParameters;
+        }
+
+        public int GetConfiguredAxisCount()
+        {
+            return GetMotionProjectConfig().GetConfiguredAxisCount();
+        }
+
+        private MotionAxisConfig GetAxisConfig(int axisIndex)
+        {
+            MotionProjectConfig projectConfig = GetMotionProjectConfig();
+            MotionAxisConfig axisConfig = projectConfig.GetAxis(axisIndex);
+            if (axisConfig == null)
+            {
+                throw new InvalidOperationException("MotionModule.json 缺少 axis" + (axisIndex + 1) + " 配置。");
+            }
+
+            axisConfig.Validate(axisIndex);
+            return axisConfig;
+        }
+
+        private MotionProjectConfig GetMotionProjectConfig()
+        {
+            if (motionProjectConfig != null)
+            {
+                return motionProjectConfig;
+            }
+
+            if (!File.Exists(motionModuleConfigPath))
+            {
+                throw new FileNotFoundException("缺少运动模组配置文件。", motionModuleConfigPath);
+            }
+
+            using (FileStream stream = File.OpenRead(motionModuleConfigPath))
+            {
+                DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(MotionModuleConfigRoot));
+                motionConfigRoot = serializer.ReadObject(stream) as MotionModuleConfigRoot;
+                if (motionConfigRoot == null ||
+                    motionConfigRoot.MotionConfigure == null ||
+                    motionConfigRoot.MotionConfigure.Length == 0)
+                {
+                    throw new InvalidOperationException("MotionModule.json 中 motion_configure 为空。");
+                }
+
+                motionProjectConfig = motionConfigRoot.MotionConfigure[0];
+                if (motionProjectConfig == null)
+                {
+                    throw new InvalidOperationException("MotionModule.json 中项目配置无效。");
+                }
+            }
+
+            return motionProjectConfig;
+        }
+
         public void SaveAxisMechanicalConfigs(IEnumerable<AxisMechanicalConfig> configs)
         {
-            IniHelper ini = new IniHelper(axisConfigPath);
+            if (configs == null)
+            {
+                throw new ArgumentNullException("configs");
+            }
+
+            MotionProjectConfig projectConfig = GetMotionProjectConfig();
             foreach (AxisMechanicalConfig config in configs)
             {
                 config.Validate();
-                ini.IniWriteValue(config.AxisName, "SCALE", config.Scale.ToString(CultureInfo.InvariantCulture));
-                ini.IniWriteValue(config.AxisName, "POS_LMT_DOWN", config.IsPosLmtDown.ToString());
-                ini.IniWriteValue(config.AxisName, "NEG_LMT_DOWN", config.IsNegLmtDown.ToString());
+                MotionAxisConfig axisConfig = projectConfig.GetAxis(config.AxisIndex);
+                if (axisConfig == null || axisConfig.MotorBaseConfigure == null)
+                {
+                    throw new InvalidOperationException("MotionModule.json 缺少 " + config.AxisName + " motor_base_configure。");
+                }
+
+                axisConfig.MotorBaseConfigure.Scale = config.Scale;
+                axisConfig.MotorBaseConfigure.PosLmtDown = config.IsPosLmtDown;
+                axisConfig.MotorBaseConfigure.NegLmtDown = config.IsNegLmtDown;
+                axisConfig.MotorBaseConfigure.Encoder = config.Encoder;
+            }
+
+            SaveMotionModuleConfig();
+        }
+
+        private void SaveMotionModuleConfig()
+        {
+            using (FileStream stream = File.Create(motionModuleConfigPath))
+            {
+                DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(MotionModuleConfigRoot));
+                serializer.WriteObject(stream, motionConfigRoot);
             }
         }
 
