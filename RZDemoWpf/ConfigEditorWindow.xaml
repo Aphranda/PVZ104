@@ -6,6 +6,7 @@
         Height="720"
         MinWidth="920"
         MinHeight="620"
+        Icon="app.ico"
         WindowStartupLocation="CenterOwner">
     <Grid Background="{StaticResource BrushSurface}">
         <Grid.RowDefinitions>

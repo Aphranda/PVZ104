@@ -22,27 +22,6 @@ namespace PVZ104.ReleaseTools
                 string targetDirectory = Path.Combine(baseDirectory, AppFolderName);
                 string appExePath = Path.Combine(targetDirectory, AppExeName);
 
-                if (File.Exists(appExePath))
-                {
-                    DialogResult choice = MessageBox.Show(
-                        "检测到软件已经解压。\r\n\r\n选择“是”覆盖更新并启动。\r\n选择“否”直接启动已有程序。\r\n选择“取消”退出。",
-                        "PVZ104 自解压包",
-                        MessageBoxButtons.YesNoCancel,
-                        MessageBoxIcon.Question,
-                        MessageBoxDefaultButton.Button2);
-
-                    if (choice == DialogResult.Cancel)
-                    {
-                        return 0;
-                    }
-
-                    if (choice == DialogResult.No)
-                    {
-                        Launch(appExePath, targetDirectory);
-                        return 0;
-                    }
-                }
-
                 Directory.CreateDirectory(targetDirectory);
                 ExtractPayload(targetDirectory);
                 Launch(appExePath, targetDirectory);
@@ -89,10 +68,11 @@ namespace PVZ104.ReleaseTools
                         if (File.Exists(destinationPath) &&
                             string.Equals(entry.Name, "MotionModule.json", StringComparison.OrdinalIgnoreCase))
                         {
-                            string backupPath = Path.Combine(
+                            string templatePath = Path.Combine(
                                 Path.GetDirectoryName(destinationPath),
-                                "MotionModule.backup-" + DateTime.Now.ToString("yyyyMMddHHmmss") + ".json");
-                            File.Copy(destinationPath, backupPath, false);
+                                "MotionModule.default.json");
+                            entry.ExtractToFile(templatePath, true);
+                            continue;
                         }
 
                         entry.ExtractToFile(destinationPath, true);
