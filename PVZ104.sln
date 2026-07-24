@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PVZ104", "PVZ104\PVZ104.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RZDemo", "RZDemo\RZDemo.csproj", "{DAEB1EA9-EB65-4094-84EF-45C2B08B7F66}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RZDemoWpf", "RZDemoWpf\RZDemoWpf.csproj", "{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E475B3A1-F116-4BD4-A7B6-E68FB04CEB05}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
@@ -46,6 +48,18 @@ Global
 		{DAEB1EA9-EB65-4094-84EF-45C2B08B7F66}.Release|x64.Build.0 = Release|Any CPU
 		{DAEB1EA9-EB65-4094-84EF-45C2B08B7F66}.Release|x86.ActiveCfg = Release|Any CPU
 		{DAEB1EA9-EB65-4094-84EF-45C2B08B7F66}.Release|x86.Build.0 = Release|Any CPU
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|x64.ActiveCfg = Debug|x64
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|x64.Build.0 = Debug|x64
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|x86.ActiveCfg = Debug|x86
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Debug|x86.Build.0 = Debug|x86
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|x64.ActiveCfg = Release|x64
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|x64.Build.0 = Release|x64
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|x86.ActiveCfg = Release|x86
+		{C8B43639-8E81-4C58-8DE8-4331E4A27BD8}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

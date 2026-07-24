@@ -1,0 +1,326 @@
+<Window x:Class="RZDemoWpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="运动控制调试器"
+        Width="1180"
+        Height="760"
+        MinWidth="1040"
+        MinHeight="680"
+        Icon="app.ico"
+        WindowStartupLocation="CenterScreen">
+    <Grid Background="{StaticResource BrushSurface}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="28" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#26323F" Padding="20,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="运动控制调试器"
+                               Foreground="White"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ActiveProjectText}"
+                               Foreground="#C8D0DA"
+                               FontSize="12"
+                               Margin="0,4,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Ellipse Width="12"
+                             Height="12"
+                             Fill="{Binding ConnectionBrush}"
+                             Margin="0,0,8,0" />
+                    <TextBlock Text="{Binding ConnectionText}"
+                               Foreground="White"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="330" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="330" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Column="0" Grid.Row="0" Style="{StaticResource PanelBorderStyle}" Margin="0,0,12,12">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="连接" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="控制器 IP" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding IpAddress, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="配置" Margin="0,12,0,0" VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="1" Grid.Column="1"
+                                  Margin="0,12,0,0"
+                                  ItemsSource="{Binding ConfigItems}"
+                                  SelectedItem="{Binding SelectedProjectItemNumber}"
+                                  IsEnabled="{Binding IsConfigurationSelectable}" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="轴" Margin="0,12,0,0" VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="2" Grid.Column="1"
+                                  Margin="0,12,0,0"
+                                  ItemsSource="{Binding AxisItems}"
+                                  SelectedItem="{Binding SelectedAxis}" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="超时 ms" Margin="0,12,0,0" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Margin="0,12,0,0" Text="{Binding TimeoutText, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <UniformGrid Columns="2" Margin="0,14,0,0">
+                        <Button Content="连接" Command="{Binding ConnectCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" />
+                        <Button Content="断开" Command="{Binding DisconnectCommand}" Margin="6,0,0,0" />
+                    </UniformGrid>
+                    <TextBlock Text="{Binding LastResultText}"
+                               Foreground="{Binding ResultBrush}"
+                               Margin="0,10,0,0"
+                               FontSize="12" />
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="0" Grid.Row="1" Style="{StaticResource PanelBorderStyle}" Margin="0,0,12,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="状态监控" />
+                    <UniformGrid Columns="2" Rows="3">
+                        <StackPanel Margin="0,0,10,14">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="状态" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding MotionStatusText}" Foreground="{Binding StatusBrush}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="报警 ID" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding AlarmId}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,10,14">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="位置" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding PositionText}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,14">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="速度" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding SpeedText}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,10,0">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="刷新" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding PollingText}" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="流程" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding BusyText}" />
+                        </StackPanel>
+                    </UniformGrid>
+                    <Separator Margin="0,12,0,12" />
+                    <TextBlock Style="{StaticResource LabelStyle}" Text="最近连接诊断" />
+                    <TextBlock Text="{Binding DiagnosticText}"
+                               Margin="0,6,0,0"
+                               Foreground="{StaticResource BrushMuted}" />
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Grid.RowSpan="2" Style="{StaticResource PanelBorderStyle}" Margin="0,0,12,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Style="{StaticResource SectionTitleStyle}" Text="手动操作" />
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="初始化并上电" Command="{Binding InitCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="重启伺服供电" Command="{Binding ServoResetCommand}" Margin="8,0,8,0" />
+                        <Button Grid.Column="2" Content="急停" Command="{Binding StopCommand}" Style="{StaticResource DangerButtonStyle}" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <Grid Grid.Row="2" Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="210" />
+                            <ColumnDefinition Width="*" MinWidth="210" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,8,0" MinHeight="168">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="点动" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource LabelStyle}" Text="速度" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding JogSpeedText, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                                <UniformGrid Columns="3" Margin="0,12,0,0">
+                                    <Button Content="负向"
+                                            IsEnabled="{Binding IsConnected}"
+                                            PreviewMouseLeftButtonDown="JogNegativeButton_PreviewMouseLeftButtonDown"
+                                            PreviewMouseLeftButtonUp="JogButton_PreviewMouseLeftButtonUp"
+                                            MouseLeave="JogButton_MouseLeave"
+                                            LostMouseCapture="JogButton_LostMouseCapture"
+                                            Margin="0,0,6,0" />
+                                    <Button Content="停止" Command="{Binding StopCommand}" Style="{StaticResource DangerButtonStyle}" Margin="6,0" />
+                                    <Button Content="正向"
+                                            IsEnabled="{Binding IsConnected}"
+                                            PreviewMouseLeftButtonDown="JogPositiveButton_PreviewMouseLeftButtonDown"
+                                            PreviewMouseLeftButtonUp="JogButton_PreviewMouseLeftButtonUp"
+                                            MouseLeave="JogButton_MouseLeave"
+                                            LostMouseCapture="JogButton_LostMouseCapture"
+                                            Margin="6,0,0,0" />
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="8,0,0,0" MinHeight="168">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="回零" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="速度" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding HomeSpeedText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="偏置" Margin="0,10,0,0" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" Text="{Binding HomeOffsetText, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                                <UniformGrid Columns="2" Margin="0,12,0,0">
+                                    <Button Content="回零" Command="{Binding HomeCommand}" Margin="0,0,6,0" />
+                                    <Button Content="清零" Command="{Binding ZeroCommand}" Margin="6,0,0,0" />
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="3" Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="210" />
+                            <ColumnDefinition Width="*" MinWidth="210" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,8,0">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="定位" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="速度" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MoveSpeedText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Separator Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,10" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="相对位置" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RelativeMovePositionText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="绝对位置" Margin="0,10,0,0" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" Text="{Binding AbsoluteMovePositionText, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                                <UniformGrid Columns="2" Margin="0,12,0,0">
+                                    <Button Content="相对定位" Command="{Binding MoveRelativeCommand}" Margin="0,0,6,0" />
+                                    <Button Content="绝对定位" Command="{Binding MoveAbsoluteCommand}" Margin="6,0,0,0" />
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="8,0,0,0">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="触发" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="起点" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TriggerStartText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="终点" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding TriggerStopText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="步长" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding TriggerStepText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="脉宽 us" Margin="0,8,0,0" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding TriggerWidthText, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                                <UniformGrid Columns="2" Margin="0,12,0,0">
+                                    <Button Content="启动触发" Command="{Binding TriggerStartCommand}" Margin="0,0,6,0" />
+                                    <Button Content="停止触发" Command="{Binding TriggerStopCommand}" Margin="6,0,0,0" />
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Grid.RowSpan="2" Style="{StaticResource PanelBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Style="{StaticResource SectionTitleStyle}" Text="自动化流程" />
+                    <StackPanel Grid.Row="1">
+                        <Button Content="回零流程" Command="{Binding AutoHomeCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,0,8" />
+                        <Button Content="0 / 90 / 180 / 270 定位测试" Command="{Binding AutoIndexCommand}" Margin="0,0,0,8" />
+                        <Button Content="补偿校准" Command="{Binding OpenCalibrationCommand}" Margin="0,0,0,8" />
+                        <Button Content="参数配置" Command="{Binding OpenConfigEditorCommand}" Margin="0,0,0,8" />
+                        <Button Content="清空日志" Command="{Binding ClearLogCommand}" />
+                    </StackPanel>
+                    <ListBox Grid.Row="2"
+                             Margin="0,14,0,0"
+                             ItemsSource="{Binding LogEntries}"
+                             BorderBrush="{StaticResource BrushBorder}"
+                             BorderThickness="1"
+                             Background="#FBFCFD"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Margin="6,3" FontFamily="Consolas" FontSize="12" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#E6EAF0" Padding="16,0">
+            <TextBlock Text="{Binding FooterText}" VerticalAlignment="Center" Foreground="{StaticResource BrushMuted}" />
+        </Border>
+    </Grid>
+</Window>

@@ -101,9 +101,22 @@ namespace PVZ104
         MotionControl motionControl = new MotionControl();
         public byte[] ipv4 = new byte[4];
 
+        public string ProjectItemNumber
+        {
+            get { return motionControl.ProjectItemNumber; }
+            set { motionControl.ProjectItemNumber = value; }
+        }
+
+        public string ActiveProjectItemNumber => motionControl.ActiveProjectItemNumber;
+
         public MotionConnectionDiagnostic LastConnectionDiagnostic => motionControl.LastConnectionDiagnostic;
 
         public string LastConnectionMessage => motionControl.LastConnectionDiagnostic.ToString();
+
+        public string[] GetAvailableProjectItemNumbers()
+        {
+            return motionControl.GetAvailableProjectItemNumbers();
+        }
 
         /// <summary>
         /// 连接高川运动控制卡

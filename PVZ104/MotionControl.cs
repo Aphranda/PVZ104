@@ -36,6 +36,30 @@ namespace PVZ104
 
         public MotionConnectionDiagnostic LastConnectionDiagnostic { get; private set; } = MotionConnectionDiagnostic.Empty;
 
+        public string ProjectItemNumber
+        {
+            get { return FileConfiguration.SelectedItemNumber; }
+            set
+            {
+                if (isConnected || IsInitialized)
+                {
+                    throw new InvalidOperationException("请先断开连接后再切换运动模组配置。");
+                }
+
+                FileConfiguration.SelectedItemNumber = value;
+            }
+        }
+
+        public string ActiveProjectItemNumber
+        {
+            get { return FileConfiguration.ActiveItemNumber; }
+        }
+
+        public string[] GetAvailableProjectItemNumbers()
+        {
+            return FileConfiguration.GetAvailableProjectItemNumbers();
+        }
+
         public bool IsConnected
         {
             get { return isConnected; }
@@ -440,7 +464,6 @@ namespace PVZ104
             AxisMechanicalConfig[] axisConfigs = FileConfiguration.GetAxisMechanicalConfigs(Math.Min(NUM, 4));
             for (int i = 0; i < axisConfigs.Length; i++)
             {
-                mp[i].Scale = axisConfigs[i].Scale;
                 ax[i].IsPoslmtDown = axisConfigs[i].IsPosLmtDown;
                 ax[i].IsNeglmtDown = axisConfigs[i].IsNegLmtDown;
                 axisEncoderModes[i] = axisConfigs[i].Encoder;

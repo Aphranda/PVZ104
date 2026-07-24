@@ -1,0 +1,236 @@
+<Window x:Class="RZDemoWpf.CalibrationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RZDemoWpf"
+        Title="补偿校准"
+        Width="1120"
+        Height="720"
+        MinWidth="960"
+        MinHeight="640"
+        WindowStartupLocation="CenterOwner">
+    <Grid Background="{StaticResource BrushSurface}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="58" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#26323F" Padding="18,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="补偿校准"
+                               Foreground="White"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding HeaderTargetText, Mode=OneWay}"
+                               Foreground="#C8D0DA"
+                               FontSize="12"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Text="有效 scale"
+                               Foreground="#C8D0DA"
+                               HorizontalAlignment="Right"
+                               FontSize="12" />
+                    <TextBlock Text="{Binding EffectiveScaleText}"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Right" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="1" Margin="16">
+            <TabItem Header="线性补偿">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="310" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource PanelBorderStyle}" Margin="0,0,12,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="计算" />
+                            <UniformGrid Columns="2">
+                                <Button Content="导入 CSV" Command="{Binding ImportLinearCsvCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" />
+                                <Button Content="写入 JSON" Command="{Binding WriteLinearJsonCommand}" Margin="6,0,0,0" />
+                            </UniformGrid>
+                            <Separator Margin="0,14,0,12" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="94" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="点数" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LinearPointCountText}" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="a" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LinearSlopeText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="b" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LinearInterceptText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="scale_factor" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LinearScaleFactorText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="RMS" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding LinearRmsErrorText}" Margin="0,8,0,0" />
+                            </Grid>
+                            <Separator Margin="0,14,0,12" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="CSV" />
+                            <TextBlock Text="{Binding LinearCsvPath}"
+                                       Foreground="{StaticResource BrushMuted}"
+                                       Margin="0,6,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding LinearCsvPath}" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="配置文件" Margin="0,14,0,0" />
+                            <TextBlock Text="{Binding ConfigPathText}"
+                                       Foreground="{StaticResource BrushMuted}"
+                                       Margin="0,6,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding ConfigPathText}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource PanelBorderStyle}" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="实测与拟合" />
+                                <local:CalibrationPlot Grid.Row="1"
+                                                       Series="{Binding LinearFitPlotSeries}"
+                                                       XAxisTitle="命令角度 deg"
+                                                       YAxisTitle="实测角度 deg" />
+                            </Grid>
+                        </Border>
+                        <Border Grid.Row="1" Style="{StaticResource PanelBorderStyle}" Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="拟合残差" />
+                                <local:CalibrationPlot Grid.Row="1"
+                                                       Series="{Binding LinearResidualPlotSeries}"
+                                                       XAxisTitle="命令角度 deg"
+                                                       YAxisTitle="残差 deg" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="离散补偿">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="310" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource PanelBorderStyle}" Margin="0,0,12,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="计算" />
+                            <UniformGrid Columns="2">
+                                <Button Content="导入 CSV" Command="{Binding ImportDiscreteCsvCommand}" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" />
+                                <Button Content="写入 JSON" Command="{Binding WriteDiscreteJsonCommand}" Margin="6,0,0,0" />
+                            </UniformGrid>
+                            <Separator Margin="0,14,0,12" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="94" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="点数" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DiscretePointCountText}" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="起点 pulse" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DiscreteStartPosText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="长度 pulse" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding DiscreteCmpLenText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="最小 pulse" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DiscreteMinPulseText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="最大 pulse" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding DiscreteMaxPulseText}" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="最大残差" Margin="0,8,0,0" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding DiscreteMaxResidualText}" Margin="0,8,0,0" />
+                            </Grid>
+                            <Separator Margin="0,14,0,12" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="CSV" />
+                            <TextBlock Text="{Binding DiscreteCsvPath}"
+                                       Foreground="{StaticResource BrushMuted}"
+                                       Margin="0,6,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding DiscreteCsvPath}" />
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="配置文件" Margin="0,14,0,0" />
+                            <TextBlock Text="{Binding ConfigPathText}"
+                                       Foreground="{StaticResource BrushMuted}"
+                                       Margin="0,6,0,0"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding ConfigPathText}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource PanelBorderStyle}" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="补偿脉冲" />
+                                <local:CalibrationPlot Grid.Row="1"
+                                                       Series="{Binding DiscreteCompensationPlotSeries}"
+                                                       XAxisTitle="命令角度 deg"
+                                                       YAxisTitle="补偿 pulse" />
+                            </Grid>
+                        </Border>
+                        <Border Grid.Row="1" Style="{StaticResource PanelBorderStyle}" Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="激光残差" />
+                                <local:CalibrationPlot Grid.Row="1"
+                                                       Series="{Binding DiscreteResidualPlotSeries}"
+                                                       XAxisTitle="命令角度 deg"
+                                                       YAxisTitle="残差 deg" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" Background="#E6EAF0" Padding="16,0">
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="{Binding StatusBrush}"
+                       VerticalAlignment="Center" />
+        </Border>
+    </Grid>
+</Window>

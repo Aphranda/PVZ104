@@ -126,8 +126,17 @@ namespace PVZ104
         [DataMember(Name = "trigger_parameters")]
         public TriggerParametersConfigure TriggerParameters { get; set; }
 
-        [DataMember(Name = "compensation_parameters")]
+        [DataMember(Name = "discrete_compensation_parameters", EmitDefaultValue = false)]
+        public CompensationParametersConfigure DiscreteCompensationParameters { get; set; }
+
+        [DataMember(Name = "full_stroke_discrete_compensation_parameters", EmitDefaultValue = false)]
+        public CompensationParametersConfigure FullStrokeDiscreteCompensationParameters { get; set; }
+
+        [DataMember(Name = "compensation_parameters", EmitDefaultValue = false)]
         public CompensationParametersConfigure CompensationParameters { get; set; }
+
+        [DataMember(Name = "linear_compensation_parameters", EmitDefaultValue = false)]
+        public LinearCompensationParametersConfigure LinearCompensationParameters { get; set; }
 
         public void Validate(int axisIndex)
         {
@@ -158,6 +167,28 @@ namespace PVZ104
             }
 
             HomeParameters.Validate(axisIndex);
+
+            if (LinearCompensationParameters != null)
+            {
+                LinearCompensationParameters.Validate(axisIndex, MotorBaseConfigure.Scale.Value);
+            }
+        }
+
+        public double GetEffectiveScale(int axisIndex)
+        {
+            double scale = MotorBaseConfigure.Scale.Value;
+            if (LinearCompensationParameters == null)
+            {
+                return scale;
+            }
+
+            LinearCompensationParameters.Validate(axisIndex, scale);
+            return LinearCompensationParameters.Apply(scale);
+        }
+
+        public CompensationParametersConfigure GetFullStrokeDiscreteCompensationParameters()
+        {
+            return DiscreteCompensationParameters ?? FullStrokeDiscreteCompensationParameters ?? CompensationParameters;
         }
 
         private static string GetAxisName(int axisIndex)
@@ -401,5 +432,45 @@ namespace PVZ104
 
         [DataMember(Name = "nCmpPos")]
         public short[] NCmpPos { get; set; }
+    }
+
+    [DataContract]
+    public class LinearCompensationParametersConfigure
+    {
+        [DataMember(Name = "enabled")]
+        public bool? Enabled { get; set; }
+
+        [DataMember(Name = "scale_factor")]
+        public double? ScaleFactor { get; set; }
+
+        [DataMember(Name = "scale_offset")]
+        public double? ScaleOffset { get; set; }
+
+        public double Apply(double baseScale)
+        {
+            if (Enabled.HasValue && !Enabled.Value)
+            {
+                return baseScale;
+            }
+
+            double factor = ScaleFactor.HasValue ? ScaleFactor.Value : 1.0;
+            double offset = ScaleOffset.HasValue ? ScaleOffset.Value : 0.0;
+            return (baseScale + offset) * factor;
+        }
+
+        public void Validate(int axisIndex, double baseScale)
+        {
+            double factor = ScaleFactor.HasValue ? ScaleFactor.Value : 1.0;
+            if (factor <= 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " linear_compensation_parameters scale_factor 必须大于 0。");
+            }
+
+            double effectiveScale = Apply(baseScale);
+            if (effectiveScale <= 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " 线性补偿后的 scale 必须大于 0。");
+            }
+        }
     }
 }

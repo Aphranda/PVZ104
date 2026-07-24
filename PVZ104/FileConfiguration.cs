@@ -17,10 +17,38 @@ namespace PVZ104
         IniHelper iniHelper = new IniHelper();
         private MotionModuleConfigRoot motionConfigRoot;
         private MotionProjectConfig motionProjectConfig;
+        private string selectedItemNumber;
 
         public FileConfiguration()
         {
             iniHelper.inipath = relinipath;
+        }
+
+        public string SelectedItemNumber
+        {
+            get { return selectedItemNumber; }
+            set
+            {
+                if (!string.Equals(selectedItemNumber, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    selectedItemNumber = value;
+                    motionProjectConfig = null;
+                }
+            }
+        }
+
+        public string ActiveItemNumber
+        {
+            get { return GetMotionProjectConfig().ItemNumber; }
+        }
+
+        public string[] GetAvailableProjectItemNumbers()
+        {
+            MotionModuleConfigRoot root = GetMotionConfigRoot();
+            return root.MotionConfigure
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemNumber))
+                .Select(item => item.ItemNumber)
+                .ToArray();
         }
 
         /// <summary>
@@ -68,7 +96,7 @@ namespace PVZ104
             motionPara.AxisNumber = axishandle;
             MotionAxisConfig axisConfig = GetAxisConfig(axisIndex);
 
-            motionPara.Scale = axisConfig.MotorBaseConfigure.Scale.Value;
+            motionPara.Scale = axisConfig.GetEffectiveScale(axisIndex);
             motionPara.Smoth = axisConfig.MoveParameters.Smooth.Value;
             motionPara.Acc = axisConfig.MoveParameters.Acc.Value;
             motionPara.Dec = axisConfig.MoveParameters.Dec.Value;
@@ -83,7 +111,7 @@ namespace PVZ104
             CompensationParametersConfigure compensation = GetCompensationParameters(axisIndex);
             if (compensation == null || compensation.PCmpPos == null || compensation.NCmpPos == null)
             {
-                throw new InvalidOperationException("MotionModule.json 缺少 axis" + (axisIndex + 1) + " compensation_parameters。");
+                throw new InvalidOperationException("MotionModule.json 缺少 axis" + (axisIndex + 1) + " discrete_compensation_parameters。");
             }
 
             int comPosLen = compensation.PCmpPos.Length;
@@ -171,7 +199,7 @@ namespace PVZ104
 
         public CompensationParametersConfigure GetCompensationParameters(int axisIndex)
         {
-            return GetAxisConfig(axisIndex).CompensationParameters;
+            return GetAxisConfig(axisIndex).GetFullStrokeDiscreteCompensationParameters();
         }
 
         public int GetConfiguredAxisCount()
@@ -199,6 +227,37 @@ namespace PVZ104
                 return motionProjectConfig;
             }
 
+            MotionModuleConfigRoot root = GetMotionConfigRoot();
+            if (string.IsNullOrWhiteSpace(selectedItemNumber))
+            {
+                motionProjectConfig = root.MotionConfigure[0];
+            }
+            else
+            {
+                motionProjectConfig = root.MotionConfigure.FirstOrDefault(
+                    item => item != null &&
+                        string.Equals(item.ItemNumber, selectedItemNumber, StringComparison.OrdinalIgnoreCase));
+                if (motionProjectConfig == null)
+                {
+                    throw new InvalidOperationException("MotionModule.json 未找到项目配置：" + selectedItemNumber + "。");
+                }
+            }
+
+            if (motionProjectConfig == null)
+            {
+                throw new InvalidOperationException("MotionModule.json 中项目配置无效。");
+            }
+
+            return motionProjectConfig;
+        }
+
+        private MotionModuleConfigRoot GetMotionConfigRoot()
+        {
+            if (motionConfigRoot != null)
+            {
+                return motionConfigRoot;
+            }
+
             if (!File.Exists(motionModuleConfigPath))
             {
                 throw new FileNotFoundException("缺少运动模组配置文件。", motionModuleConfigPath);
@@ -214,15 +273,9 @@ namespace PVZ104
                 {
                     throw new InvalidOperationException("MotionModule.json 中 motion_configure 为空。");
                 }
-
-                motionProjectConfig = motionConfigRoot.MotionConfigure[0];
-                if (motionProjectConfig == null)
-                {
-                    throw new InvalidOperationException("MotionModule.json 中项目配置无效。");
-                }
             }
 
-            return motionProjectConfig;
+            return motionConfigRoot;
         }
 
         public void SaveAxisMechanicalConfigs(IEnumerable<AxisMechanicalConfig> configs)
