@@ -548,6 +548,15 @@ namespace RZDemo
             TopMessage.SelectionStart = TopMessage.Text.Length;
             TopMessage.ScrollToCaret();
         }
+
+        private void axisConfigurationToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (AxisConfigForm axisConfigForm = new AxisConfigForm(connect_flag))
+            {
+                axisConfigForm.ShowDialog(this);
+            }
+        }
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             System.Diagnostics.Process.GetCurrentProcess().Kill();

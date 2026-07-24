@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -11,6 +12,7 @@ namespace PVZ104
     public class FileConfiguration
     {
         private string relinipath = System.IO.Directory.GetCurrentDirectory() + "\\runparam.ini";//程序运行目录
+        private string axisConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "axisconfig.ini");
         IniHelper iniHelper = new IniHelper();
 
         public FileConfiguration()
@@ -89,6 +91,100 @@ namespace PVZ104
                 comData[i] = Convert.ToInt16(comNeg[i - comPosLen]);
             }
             return comData;
+        }
+
+        public AxisMechanicalConfig[] GetDefaultAxisMechanicalConfigs()
+        {
+            return new AxisMechanicalConfig[]
+            {
+                new AxisMechanicalConfig { AxisIndex = 0, Scale = 18000, IsPosLmtDown = false, IsNegLmtDown = false },
+                new AxisMechanicalConfig { AxisIndex = 1, Scale = 252505, IsPosLmtDown = false, IsNegLmtDown = false },
+                new AxisMechanicalConfig { AxisIndex = 2, Scale = 30010.5, IsPosLmtDown = true, IsNegLmtDown = true },
+                new AxisMechanicalConfig { AxisIndex = 3, Scale = 20000, IsPosLmtDown = true, IsNegLmtDown = false },
+            };
+        }
+
+        public AxisMechanicalConfig[] GetAxisMechanicalConfigs(int count = 4)
+        {
+            AxisMechanicalConfig[] defaults = GetDefaultAxisMechanicalConfigs();
+            if (!File.Exists(axisConfigPath))
+            {
+                SaveAxisMechanicalConfigs(defaults);
+                return defaults.Take(count).Select(config => config.Clone()).ToArray();
+            }
+
+            IniHelper ini = new IniHelper(axisConfigPath);
+            AxisMechanicalConfig[] configs = new AxisMechanicalConfig[count];
+            for (int i = 0; i < count; i++)
+            {
+                AxisMechanicalConfig fallback = i < defaults.Length
+                    ? defaults[i]
+                    : new AxisMechanicalConfig { AxisIndex = i, Scale = 1, IsPosLmtDown = true, IsNegLmtDown = false };
+
+                string section = fallback.AxisName;
+                configs[i] = new AxisMechanicalConfig
+                {
+                    AxisIndex = i,
+                    Scale = ReadDouble(ini, section, "SCALE", fallback.Scale),
+                    IsPosLmtDown = ReadBool(ini, section, "POS_LMT_DOWN", fallback.IsPosLmtDown),
+                    IsNegLmtDown = ReadBool(ini, section, "NEG_LMT_DOWN", fallback.IsNegLmtDown),
+                };
+
+                try
+                {
+                    configs[i].Validate();
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    configs[i] = fallback.Clone();
+                }
+            }
+
+            return configs;
+        }
+
+        public void SaveAxisMechanicalConfigs(IEnumerable<AxisMechanicalConfig> configs)
+        {
+            IniHelper ini = new IniHelper(axisConfigPath);
+            foreach (AxisMechanicalConfig config in configs)
+            {
+                config.Validate();
+                ini.IniWriteValue(config.AxisName, "SCALE", config.Scale.ToString(CultureInfo.InvariantCulture));
+                ini.IniWriteValue(config.AxisName, "POS_LMT_DOWN", config.IsPosLmtDown.ToString());
+                ini.IniWriteValue(config.AxisName, "NEG_LMT_DOWN", config.IsNegLmtDown.ToString());
+            }
+        }
+
+        private double ReadDouble(IniHelper ini, string section, string key, double fallback)
+        {
+            string value = ini.IniReadValue(section, key);
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double result))
+            {
+                return result;
+            }
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out result))
+            {
+                return result;
+            }
+            return fallback;
+        }
+
+        private bool ReadBool(IniHelper ini, string section, string key, bool fallback)
+        {
+            string value = ini.IniReadValue(section, key);
+            if (bool.TryParse(value, out bool result))
+            {
+                return result;
+            }
+            if (value == "1")
+            {
+                return true;
+            }
+            if (value == "0")
+            {
+                return false;
+            }
+            return fallback;
         }
     }
 

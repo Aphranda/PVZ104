@@ -153,17 +153,14 @@ namespace PVZ104
             }
 
 
-            // TODO 根据机械结构配置各轴参数
-            mp[0].Scale = 18000;      // 1°的脉冲数量 18000
-            mp[1].Scale = 252505;    // 26260 455000
-            mp[2].Scale = 30010.5;    // 1mm的脉冲
-            mp[3].Scale = 20000;
-            ax[0].IsPoslmtDown = false;
-            ax[0].IsPoslmtDown = false;
-            ax[1].IsPoslmtDown = false; // true
-            ax[1].IsNeglmtDown = false; // ture
-            ax[2].IsNeglmtDown = true;
-            ax[2].IsPoslmtDown = true;
+            // 根据机械结构配置各轴参数
+            AxisMechanicalConfig[] axisConfigs = FileConfiguration.GetAxisMechanicalConfigs(Math.Min(NUM, 4));
+            for (int i = 0; i < axisConfigs.Length; i++)
+            {
+                mp[i].Scale = axisConfigs[i].Scale;
+                ax[i].IsPoslmtDown = axisConfigs[i].IsPosLmtDown;
+                ax[i].IsNeglmtDown = axisConfigs[i].IsNegLmtDown;
+            }
 
 
             AxisPara axisPara = new AxisPara();

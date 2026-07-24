@@ -121,11 +121,15 @@ namespace RZDemo
             this.label2 = new System.Windows.Forms.Label();
             this.textBox_ReTime = new System.Windows.Forms.TextBox();
             this.label38 = new System.Windows.Forms.Label();
+            this.menuStrip1 = new System.Windows.Forms.MenuStrip();
+            this.configToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.axisConfigurationToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.panel5.SuspendLayout();
             this.panel4.SuspendLayout();
             this.panel3.SuspendLayout();
             this.panel2.SuspendLayout();
             this.panel1.SuspendLayout();
+            this.menuStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
             // panel5
@@ -144,7 +148,7 @@ namespace RZDemo
             this.panel5.Controls.Add(this.label35);
             this.panel5.Controls.Add(this.textBox_TriggerStep);
             this.panel5.Enabled = false;
-            this.panel5.Location = new System.Drawing.Point(1103, 492);
+            this.panel5.Location = new System.Drawing.Point(1103, 517);
             this.panel5.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.panel5.Name = "panel5";
             this.panel5.Size = new System.Drawing.Size(276, 215);
@@ -431,7 +435,7 @@ namespace RZDemo
             this.panel4.Controls.Add(this.textBox_testSpeed);
             this.panel4.Controls.Add(this.label16);
             this.panel4.Controls.Add(this.label13);
-            this.panel4.Location = new System.Drawing.Point(1136, 14);
+            this.panel4.Location = new System.Drawing.Point(1136, 39);
             this.panel4.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.panel4.Name = "panel4";
             this.panel4.Size = new System.Drawing.Size(243, 471);
@@ -439,7 +443,7 @@ namespace RZDemo
             // 
             // TopMessage
             // 
-            this.TopMessage.Location = new System.Drawing.Point(27, 492);
+            this.TopMessage.Location = new System.Drawing.Point(27, 517);
             this.TopMessage.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.TopMessage.Name = "TopMessage";
             this.TopMessage.Size = new System.Drawing.Size(1068, 212);
@@ -463,7 +467,7 @@ namespace RZDemo
             // 
             this.panel3.BackColor = System.Drawing.SystemColors.ControlDark;
             this.panel3.Controls.Add(this.btn_signal);
-            this.panel3.Location = new System.Drawing.Point(934, 14);
+            this.panel3.Location = new System.Drawing.Point(934, 39);
             this.panel3.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.panel3.Name = "panel3";
             this.panel3.Size = new System.Drawing.Size(197, 82);
@@ -548,7 +552,7 @@ namespace RZDemo
             this.panel2.Controls.Add(this.label18);
             this.panel2.Controls.Add(this.textBox_relSpeed);
             this.panel2.Controls.Add(this.label17);
-            this.panel2.Location = new System.Drawing.Point(27, 105);
+            this.panel2.Location = new System.Drawing.Point(27, 130);
             this.panel2.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.panel2.Name = "panel2";
             this.panel2.Size = new System.Drawing.Size(1104, 380);
@@ -1011,7 +1015,7 @@ namespace RZDemo
             this.panel1.Controls.Add(this.textBox_port);
             this.panel1.Controls.Add(this.label5);
             this.panel1.Controls.Add(this.label2);
-            this.panel1.Location = new System.Drawing.Point(27, 14);
+            this.panel1.Location = new System.Drawing.Point(27, 39);
             this.panel1.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(901, 82);
@@ -1141,19 +1145,46 @@ namespace RZDemo
             this.label38.TabIndex = 72;
             this.label38.Text = "Time:";
             // 
+            // menuStrip1
+            // 
+            this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.configToolStripMenuItem});
+            this.menuStrip1.Location = new System.Drawing.Point(0, 0);
+            this.menuStrip1.Name = "menuStrip1";
+            this.menuStrip1.Size = new System.Drawing.Size(1382, 25);
+            this.menuStrip1.TabIndex = 73;
+            this.menuStrip1.Text = "menuStrip1";
+            // 
+            // configToolStripMenuItem
+            // 
+            this.configToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.axisConfigurationToolStripMenuItem});
+            this.configToolStripMenuItem.Name = "configToolStripMenuItem";
+            this.configToolStripMenuItem.Size = new System.Drawing.Size(57, 21);
+            this.configToolStripMenuItem.Text = "配置";
+            // 
+            // axisConfigurationToolStripMenuItem
+            // 
+            this.axisConfigurationToolStripMenuItem.Name = "axisConfigurationToolStripMenuItem";
+            this.axisConfigurationToolStripMenuItem.Size = new System.Drawing.Size(190, 22);
+            this.axisConfigurationToolStripMenuItem.Text = "轴机械参数";
+            this.axisConfigurationToolStripMenuItem.Click += new System.EventHandler(this.axisConfigurationToolStripMenuItem_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(10F, 21F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ControlLight;
-            this.ClientSize = new System.Drawing.Size(1382, 723);
+            this.ClientSize = new System.Drawing.Size(1382, 748);
             this.Controls.Add(this.panel5);
             this.Controls.Add(this.panel4);
             this.Controls.Add(this.TopMessage);
             this.Controls.Add(this.panel3);
             this.Controls.Add(this.panel2);
             this.Controls.Add(this.panel1);
+            this.Controls.Add(this.menuStrip1);
             this.Font = new System.Drawing.Font("微软雅黑", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.MainMenuStrip = this.menuStrip1;
             this.Margin = new System.Windows.Forms.Padding(5, 4, 5, 4);
             this.Name = "Form1";
             this.Text = "RZDemo";
@@ -1167,7 +1198,10 @@ namespace RZDemo
             this.panel2.PerformLayout();
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
+            this.menuStrip1.ResumeLayout(false);
+            this.menuStrip1.PerformLayout();
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
@@ -1264,6 +1298,9 @@ namespace RZDemo
         private TextBox textBox_scale;
         private TextBox textBox_ReTime;
         private Label label38;
+        private MenuStrip menuStrip1;
+        private ToolStripMenuItem configToolStripMenuItem;
+        private ToolStripMenuItem axisConfigurationToolStripMenuItem;
     }
 }
 
