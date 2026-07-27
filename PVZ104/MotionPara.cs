@@ -306,8 +306,8 @@ namespace PVZ104
     public class AxisPara
     {
         // 限位激活与电平 1:有效, 0:无效; 1:高电平, 0:低电平。
-        private short poslmt = 1;
-        private short neglmt = 1;
+        private short poslmt = 0;
+        private short neglmt = 0;
         private short alarmEnable = 0;
 
         private short poslmtlev = 1;
@@ -319,7 +319,7 @@ namespace PVZ104
         private short stepMode = 0;
 
         // 软限位激活与设置
-        private short softlmt = 1;
+        private short softlmt = 0;
         private double softlmtpos = 32768;
         private double softlmtneg = -32768;
 

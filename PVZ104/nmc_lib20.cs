@@ -61,6 +61,7 @@ namespace GC.Frame.Motion.Private
         /// <summary>
         /// 设备资源信息
         /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
         public struct TDevResourceInfo
         {
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
@@ -657,6 +658,7 @@ namespace GC.Frame.Motion.Private
         /// <summary>
         /// 单轴PTP运动参数结构
         /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
         public struct TPtpPara
         {
             public double acc;      // 加速度
@@ -833,6 +835,7 @@ namespace GC.Frame.Motion.Private
         /// <summary>
         /// 单轴点位运动打包
         /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
         public struct TMovePtpPack8
         {
             public short axisMask;            // 轴掩码，对应bit为1表示该轴参与运动
@@ -911,6 +914,7 @@ namespace GC.Frame.Motion.Private
         /// <summary>
         ///  回零参数设置
         /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
         public struct THomeSetting
         {
             public short mode;             // 模式，HM_MODE1 ~ HM_MODE6 （必须）
@@ -5442,6 +5446,7 @@ namespace GC.Frame.Motion.Private
         public static extern Int16 NMC_Comp2DimensStatus(HAND devHandle, Int16 group, ref Int16 pStatus, ref Int16 pOutCount, Int16 chn);
 
 
+        [StructLayout(LayoutKind.Sequential)]
         public struct TComp2DimensSts
         {
             public short sts;              // 运行状态，0 空闲 1 忙

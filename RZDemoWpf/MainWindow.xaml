@@ -127,6 +127,11 @@
                             <TextBlock Style="{StaticResource ValueStyle}" Text="{Binding BusyText}" />
                         </StackPanel>
                     </UniformGrid>
+                    <TextBlock Style="{StaticResource LabelStyle}" Text="报警含义" />
+                    <TextBlock Text="{Binding AlarmDescription}"
+                               Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource BrushMuted}" />
                     <Separator Margin="0,12,0,12" />
                     <TextBlock Style="{StaticResource LabelStyle}" Text="最近连接诊断" />
                     <TextBlock Text="{Binding DiagnosticText}"
@@ -166,6 +171,7 @@
                         <Border Grid.Column="0" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,8,0" MinHeight="168">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionTitleStyle}" Text="点动" />
+                                <TextBlock Style="{StaticResource LabelStyle}" Text="按住运动，松开停止" Margin="0,0,0,8" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="80" />
@@ -196,7 +202,23 @@
 
                         <Border Grid.Column="1" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="8,0,0,0" MinHeight="168">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="回零" />
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SectionTitleStyle}" Text="回零" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Width="10"
+                                                 Height="10"
+                                                 Fill="{Binding HomeStatusBrush}"
+                                                 Margin="0,0,6,0" />
+                                        <TextBlock Text="{Binding HomeStatusText}"
+                                                   Foreground="{Binding HomeStatusBrush}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="80" />

@@ -109,23 +109,26 @@ namespace PVZ104
         {
             int axisIndex = axishandle >= 257 ? axishandle - 257 : axishandle;
             CompensationParametersConfigure compensation = GetCompensationParameters(axisIndex);
-            if (compensation == null || compensation.PCmpPos == null || compensation.NCmpPos == null)
+            if (compensation == null)
             {
                 throw new InvalidOperationException("MotionModule.json 缺少 axis" + (axisIndex + 1) + " discrete_compensation_parameters。");
             }
 
-            int comPosLen = compensation.PCmpPos.Length;
-            int comNegLen = compensation.NCmpPos.Length;
+            compensation.Validate(axisIndex);
+            short[] positive = compensation.GetPositiveCompensationArray();
+            short[] negative = compensation.GetNegativeCompensationArray();
+            int comPosLen = positive.Length;
+            int comNegLen = negative.Length;
 
             short[] comData = new short[comPosLen + comNegLen];
 
-            for (int i = 0; i < compensation.PCmpPos.Length; i++)
+            for (int i = 0; i < positive.Length; i++)
             {
-                comData[i] = compensation.PCmpPos[i];
+                comData[i] = positive[i];
             }
             for (int i = comPosLen; i < comPosLen + comNegLen; i++)
             {
-                comData[i] = compensation.NCmpPos[i - comPosLen];
+                comData[i] = negative[i - comPosLen];
             }
             return comData;
         }
@@ -190,6 +193,11 @@ namespace PVZ104
         public JogParametersConfigure GetJogParameters(int axisIndex)
         {
             return GetAxisConfig(axisIndex).JogParameters;
+        }
+
+        public MotorBaseConfigure GetMotorBaseConfigure(int axisIndex)
+        {
+            return GetAxisConfig(axisIndex).MotorBaseConfigure;
         }
 
         public TriggerParametersConfigure GetTriggerParameters(int axisIndex)

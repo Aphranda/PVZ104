@@ -9,8 +9,11 @@
             "scale": 18000,
             "smooth": 100,
             "encoder": 256,
+            "pos_lmt_enable": 0,
+            "neg_lmt_enable": 0,
             "pos_lmt_down": false,
-            "neg_lmt_down": false
+            "neg_lmt_down": false,
+            "soft_lmt_enable": 0
           },
           "home_parameters": {
             "homeMode": 3,
@@ -76,8 +79,11 @@
             "scale": 10000,
             "smooth": 100,
             "encoder": 256,
+            "pos_lmt_enable": 0,
+            "neg_lmt_enable": 0,
             "pos_lmt_down": false,
-            "neg_lmt_down": false
+            "neg_lmt_down": false,
+            "soft_lmt_enable": 0
           },
           "home_parameters": {
             "homeMode": 3,

@@ -17,9 +17,11 @@ namespace RZDemoWpf
 {
     internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
+        private const uint ServoStartupDelayMs = 3000;
         private readonly AutoGCApi controller = new AutoGCApi();
         private readonly DispatcherTimer pollTimer;
         private bool isConnected;
+        private bool isInitialized;
         private bool isBusy;
         private bool isPolling;
         private string ipAddress = "192.168.1.10";
@@ -33,10 +35,14 @@ namespace RZDemoWpf
         private string pollingText = "停止";
         private string busyText = "空闲";
         private string alarmId = "0";
+        private string alarmDescription = "正常";
+        private string homeStatusText = "未回零";
         private string lastResultText = "等待连接";
         private string diagnosticText = "无";
         private string footerText = "Ready";
         private bool isJogHolding;
+        private bool isJogStopping;
+        private Task<E_Result> currentJogStartTask = Task.FromResult(E_Result.E_FAILED);
         private string calibrationCsvPath = "";
         private string calibrationPointCountText = "0";
         private string calibrationSlopeText = "--";
@@ -52,6 +58,7 @@ namespace RZDemoWpf
         private string discreteMaxResidualText = "--";
         private Brush connectionBrush = Brushes.Gray;
         private Brush statusBrush = Brushes.Gray;
+        private Brush homeStatusBrush = Brushes.Gray;
         private Brush resultBrush = Brushes.DimGray;
 
         public MainViewModel()
@@ -74,18 +81,18 @@ namespace RZDemoWpf
 
             ConnectCommand = new RelayCommand(_ => RunOperationAsync("连接", ConnectCore), _ => !IsBusy && !IsConnected);
             DisconnectCommand = new RelayCommand(_ => RunOperationAsync("断开", DisconnectCore), _ => !IsBusy && IsConnected);
-            InitCommand = new RelayCommand(_ => RunOperationAsync("初始化并上电", () => controller.Init(CurrentAxis, false, ParseTimeoutAsUInt32())), CanRunMotionCommand);
-            ServoResetCommand = new RelayCommand(_ => RunOperationAsync("重启伺服供电", () => controller.Init(CurrentAxis, true, ParseTimeoutAsUInt32())), CanRunMotionCommand);
-            StopCommand = new RelayCommand(_ => RunOperationAsync("停止", () => controller.Stop(CurrentAxis)), _ => IsConnected);
-            JogNegativeCommand = new RelayCommand(_ => RunOperationAsync("负向点动", () => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), false)), CanRunMotionCommand);
-            JogPositiveCommand = new RelayCommand(_ => RunOperationAsync("正向点动", () => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), true)), CanRunMotionCommand);
+            InitCommand = new RelayCommand(_ => RunOperationAsync("初始化并上电", () => InitCore(false)), CanRunConnectedCommand);
+            ServoResetCommand = new RelayCommand(_ => RunOperationAsync("重启伺服供电", () => InitCore(true)), CanRunConnectedCommand);
+            StopCommand = new RelayCommand(_ => RunOperationAsync("停止", () => controller.Stop(CurrentAxis)), _ => IsConnected && IsInitialized);
+            JogNegativeCommand = new RelayCommand(_ => RunOperationAsync("负向点动", () => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), true)), CanRunMotionCommand);
+            JogPositiveCommand = new RelayCommand(_ => RunOperationAsync("正向点动", () => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), false)), CanRunMotionCommand);
             HomeCommand = new RelayCommand(_ => RunOperationAsync("回零", HomeCore), CanRunMotionCommand);
             ZeroCommand = new RelayCommand(_ => RunOperationAsync("清零", () => controller.Zero(CurrentAxis)), CanRunMotionCommand);
             MoveRelativeCommand = new RelayCommand(_ => RunOperationAsync("相对移动", MoveRelativeCore), CanRunMotionCommand);
             MoveAbsoluteCommand = new RelayCommand(_ => RunOperationAsync("绝对移动", MoveAbsoluteCore), CanRunMotionCommand);
             TriggerStartCommand = new RelayCommand(_ => RunOperationAsync("启动触发", TriggerStartCore), CanRunMotionCommand);
             TriggerStopCommand = new RelayCommand(_ => RunOperationAsync("停止触发", () => controller.TriggerStop(CurrentAxis)), CanRunMotionCommand);
-            AutoHomeCommand = new RelayCommand(_ => RunOperationAsync("自动回零流程", AutoHomeCore), CanRunMotionCommand);
+            AutoHomeCommand = new RelayCommand(_ => RunOperationAsync("自动回零流程", AutoHomeCore), CanRunConnectedCommand);
             AutoIndexCommand = new RelayCommand(_ => RunOperationAsync("定位测试流程", AutoIndexCore), CanRunMotionCommand);
             OpenCalibrationCommand = new RelayCommand(_ => OpenCalibrationWindow(), _ => !IsBusy);
             OpenConfigEditorCommand = new RelayCommand(_ => OpenConfigEditorWindow(), _ => !IsBusy && !IsConnected);
@@ -211,6 +218,18 @@ namespace RZDemoWpf
             private set => SetProperty(ref alarmId, value);
         }
 
+        public string AlarmDescription
+        {
+            get => alarmDescription;
+            private set => SetProperty(ref alarmDescription, value);
+        }
+
+        public string HomeStatusText
+        {
+            get => homeStatusText;
+            private set => SetProperty(ref homeStatusText, value);
+        }
+
         public string LastResultText
         {
             get => lastResultText;
@@ -319,6 +338,12 @@ namespace RZDemoWpf
             private set => SetProperty(ref statusBrush, value);
         }
 
+        public Brush HomeStatusBrush
+        {
+            get => homeStatusBrush;
+            private set => SetProperty(ref homeStatusBrush, value);
+        }
+
         public Brush ResultBrush
         {
             get => resultBrush;
@@ -341,6 +366,18 @@ namespace RZDemoWpf
             }
         }
 
+        private bool IsInitialized
+        {
+            get => isInitialized;
+            set
+            {
+                if (SetProperty(ref isInitialized, value))
+                {
+                    RaiseCommandStates();
+                }
+            }
+        }
+
         public bool IsBusy
         {
             get => isBusy;
@@ -355,7 +392,7 @@ namespace RZDemoWpf
             }
         }
 
-        private Dimension CurrentAxis => Dimension.Axis01;
+        private Dimension CurrentAxis => (Dimension)CurrentAxisIndex;
 
         private int CurrentAxisIndex
         {
@@ -371,6 +408,11 @@ namespace RZDemoWpf
 
         private bool CanRunMotionCommand(object parameter)
         {
+            return IsConnected && IsInitialized && !IsBusy;
+        }
+
+        private bool CanRunConnectedCommand(object parameter)
+        {
             return IsConnected && !IsBusy;
         }
 
@@ -382,6 +424,7 @@ namespace RZDemoWpf
             RunOnUi(() =>
             {
                 IsConnected = result == E_Result.E_SUCCESS || result == E_Result.E_ALREADY_CONNECTED;
+                IsInitialized = false;
                 DiagnosticText = controller.LastConnectionMessage;
                 if (IsConnected)
                 {
@@ -399,11 +442,29 @@ namespace RZDemoWpf
             {
                 pollTimer.Stop();
                 IsConnected = false;
+                IsInitialized = false;
                 MotionStatusText = "未知";
                 StatusBrush = Brushes.Gray;
                 PositionText = "--";
                 SpeedText = "--";
+                AlarmId = "--";
+                AlarmDescription = "未连接";
+                HomeStatusText = "未连接";
+                HomeStatusBrush = Brushes.Gray;
                 DiagnosticText = "无";
+            });
+
+            return result;
+        }
+
+        private E_Result InitCore(bool servoReset)
+        {
+            E_Result result = controller.Init(CurrentAxis, servoReset, ServoStartupDelayMs);
+            RunOnUi(() =>
+            {
+                IsInitialized = result == E_Result.E_SUCCESS;
+                DiagnosticText = controller.LastInitializationMessage;
+                AppendLog(controller.LastInitializationMessage);
             });
 
             return result;
@@ -438,17 +499,17 @@ namespace RZDemoWpf
 
         public void BeginJogHold(bool positive)
         {
-            if (isJogHolding || !CanRunMotionCommand(null))
+            if (isJogHolding || isJogStopping || !CanRunMotionCommand(null))
             {
                 return;
             }
 
             isJogHolding = true;
             string name = positive ? "正向点动" : "负向点动";
-            RunOperationAsync(name, () => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), positive));
+            _ = RunJogStartAsync(name, positive);
         }
 
-        public void EndJogHold()
+        public async void EndJogHold()
         {
             if (!isJogHolding)
             {
@@ -456,9 +517,31 @@ namespace RZDemoWpf
             }
 
             isJogHolding = false;
-            if (IsConnected)
+            isJogStopping = true;
+            try
             {
-                RunOperationAsync("停止", () => controller.Stop(CurrentAxis));
+                try
+                {
+                    E_Result startResult = await currentJogStartTask;
+                    if (startResult != E_Result.E_SUCCESS)
+                    {
+                        return;
+                    }
+                }
+                catch
+                {
+                    // 启动异常会在 RunJogStartAsync 中发布，这里只保证释放动作继续尝试停轴。
+                    return;
+                }
+
+                if (IsConnected && IsInitialized)
+                {
+                    await RunOperationTaskAsync("停止", () => controller.Stop(CurrentAxis));
+                }
+            }
+            finally
+            {
+                isJogStopping = false;
             }
         }
 
@@ -475,7 +558,7 @@ namespace RZDemoWpf
 
         private E_Result AutoHomeCore()
         {
-            E_Result result = controller.Init(CurrentAxis, false, ParseTimeoutAsUInt32());
+            E_Result result = InitCore(false);
             if (result != E_Result.E_SUCCESS)
             {
                 return result;
@@ -513,6 +596,11 @@ namespace RZDemoWpf
         }
 
         private async void RunOperationAsync(string name, Func<E_Result> operation)
+        {
+            await RunOperationTaskAsync(name, operation);
+        }
+
+        private async Task RunOperationTaskAsync(string name, Func<E_Result> operation)
         {
             bool managesBusy = name != "停止";
             if (IsBusy && managesBusy)
@@ -554,6 +642,49 @@ namespace RZDemoWpf
             }
         }
 
+        private async Task RunJogStartAsync(string name, bool positive)
+        {
+            if (IsBusy)
+            {
+                return;
+            }
+
+            IsBusy = true;
+            FooterText = name + " 中";
+            AppendLog(name + " 开始");
+
+            bool apiDirection = !positive;
+            Task<E_Result> startTask = Task.Run(() => controller.Jog(CurrentAxis, ParseDouble(JogSpeedText, "点动速度"), apiDirection));
+            currentJogStartTask = startTask;
+
+            try
+            {
+                E_Result result = await startTask;
+                PublishResult(name, result);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    isJogHolding = false;
+                }
+
+                if (IsConnected)
+                {
+                    await RefreshStatusAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                isJogHolding = false;
+                LastResultText = name + " 异常：" + ex.Message;
+                ResultBrush = Brushes.Firebrick;
+                AppendLog(name + " 异常：" + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                IsBusy = false;
+                FooterText = "Ready";
+            }
+        }
+
         private void PublishResult(string name, E_Result result)
         {
             bool success = result == E_Result.E_SUCCESS || result == E_Result.E_ALREADY_CONNECTED || result == E_Result.E_ALREADY_DISCONNECTED;
@@ -564,7 +695,7 @@ namespace RZDemoWpf
 
         private async void PollTimer_Tick(object sender, EventArgs e)
         {
-            if (!IsConnected || IsBusy || isPolling)
+            if (!IsConnected || isPolling)
             {
                 return;
             }
@@ -589,6 +720,9 @@ namespace RZDemoWpf
             {
                 MotionStatusText = "读取异常";
                 StatusBrush = Brushes.Firebrick;
+                HomeStatusText = "读取异常";
+                HomeStatusBrush = Brushes.Firebrick;
+                AlarmDescription = "状态读取异常：" + ex.Message;
                 AppendLog("状态读取异常：" + ex.Message);
             }
             finally
@@ -603,6 +737,7 @@ namespace RZDemoWpf
             snapshot.StatusResult = controller.GetStatus(CurrentAxis, out snapshot.Status, out snapshot.Alarm);
             snapshot.PositionResult = controller.GetPosition(CurrentAxis, out snapshot.Position);
             snapshot.SpeedResult = controller.GetSpeed(CurrentAxis, out snapshot.Speed);
+            snapshot.HomeStatusResult = controller.GetHomeStatus(CurrentAxis, out snapshot.HomeStatus);
             return snapshot;
         }
 
@@ -613,12 +748,26 @@ namespace RZDemoWpf
                 MotionStatusText = TranslateStatus(snapshot.Status);
                 StatusBrush = GetStatusBrush(snapshot.Status);
                 AlarmId = snapshot.Alarm.ToString(CultureInfo.InvariantCulture);
+                AlarmDescription = TranslateAlarm(snapshot.Alarm);
+                ApplyHomeStatus(snapshot);
+            }
+            else if (snapshot.StatusResult == E_Result.E_INVALID_ARGUMENT)
+            {
+                MotionStatusText = "未初始化";
+                StatusBrush = Brushes.DarkOrange;
+                AlarmId = "--";
+                AlarmDescription = "轴未初始化或句柄无效";
+                HomeStatusText = "未初始化";
+                HomeStatusBrush = Brushes.DarkOrange;
+                IsInitialized = false;
             }
             else
             {
                 MotionStatusText = "读取失败";
                 StatusBrush = Brushes.Firebrick;
                 AlarmId = snapshot.Alarm.ToString(CultureInfo.InvariantCulture);
+                AlarmDescription = TranslateAlarm(snapshot.Alarm);
+                ApplyHomeStatus(snapshot);
             }
 
             PositionText = snapshot.PositionResult == E_Result.E_SUCCESS
@@ -627,6 +776,19 @@ namespace RZDemoWpf
             SpeedText = snapshot.SpeedResult == E_Result.E_SUCCESS
                 ? snapshot.Speed.ToString("0.###", CultureInfo.InvariantCulture)
                 : "--";
+        }
+
+        private void ApplyHomeStatus(StatusSnapshot snapshot)
+        {
+            if (snapshot.HomeStatusResult != E_Result.E_SUCCESS)
+            {
+                HomeStatusText = "读取失败";
+                HomeStatusBrush = Brushes.Firebrick;
+                return;
+            }
+
+            HomeStatusText = TranslateHomeStatus(snapshot.HomeStatus);
+            HomeStatusBrush = GetHomeStatusBrush(snapshot.HomeStatus);
         }
 
         private void LoadProjectSummary()
@@ -1152,6 +1314,93 @@ namespace RZDemoWpf
             }
         }
 
+        private static string TranslateAlarm(int alarm)
+        {
+            if (alarm == 0)
+            {
+                return "正常";
+            }
+
+            List<string> descriptions = new List<string>();
+            AddAlarmDescription(descriptions, alarm, 128, "未连接");
+            AddAlarmDescription(descriptions, alarm, 256, "伺服使能异常");
+            AddAlarmDescription(descriptions, alarm, 512, "复位异常");
+            AddAlarmDescription(descriptions, alarm, 1024, "原点回归异常");
+            AddAlarmDescription(descriptions, alarm, 2048, "绝对定位异常");
+            AddAlarmDescription(descriptions, alarm, 4096, "相对定位异常");
+            AddAlarmDescription(descriptions, alarm, 8192, "运动超时");
+            AddAlarmDescription(descriptions, alarm, 16384, "限位触发");
+            AddAlarmDescription(descriptions, alarm, 32768, "驱动器报警");
+            AddAlarmDescription(descriptions, alarm, 65536, "配置或补偿参数异常");
+
+            int knownMask = 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 | 65536;
+            int unknown = alarm & ~knownMask;
+            if (unknown != 0)
+            {
+                descriptions.Add("未知报警位 " + unknown.ToString(CultureInfo.InvariantCulture));
+            }
+
+            return descriptions.Count == 0 ? "未知报警" : string.Join("、", descriptions);
+        }
+
+        private static void AddAlarmDescription(List<string> descriptions, int alarm, int bit, string description)
+        {
+            if ((alarm & bit) != 0)
+            {
+                descriptions.Add(description);
+            }
+        }
+
+        private static string TranslateHomeStatus(short homeStatus)
+        {
+            if ((homeStatus & 4) != 0)
+            {
+                return "回零失败";
+            }
+
+            if ((homeStatus & 8) != 0)
+            {
+                return "回零参数错误";
+            }
+
+            if ((homeStatus & 16) != 0)
+            {
+                return "原点开关未触发";
+            }
+
+            if ((homeStatus & 1) != 0)
+            {
+                return "回零中";
+            }
+
+            if ((homeStatus & 2) != 0)
+            {
+                return "回零成功";
+            }
+
+            return "未回零";
+        }
+
+        private static Brush GetHomeStatusBrush(short homeStatus)
+        {
+            if ((homeStatus & (4 | 8 | 16)) != 0)
+            {
+                return Brushes.Firebrick;
+            }
+
+            if ((homeStatus & 1) != 0)
+            {
+                return Brushes.SteelBlue;
+            }
+
+            if ((homeStatus & 2) != 0)
+            {
+                return Brushes.SeaGreen;
+            }
+
+            return Brushes.Gray;
+        }
+
         private static Brush GetStatusBrush(E_Turntable_Status status)
         {
             switch (status)
@@ -1318,6 +1567,8 @@ namespace RZDemoWpf
             public double Position;
             public E_Result SpeedResult;
             public double Speed;
+            public E_Result HomeStatusResult;
+            public short HomeStatus;
         }
 
         private sealed class CalibrationFitResult

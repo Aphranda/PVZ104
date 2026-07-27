@@ -14,6 +14,7 @@ namespace PVZ104
         RelativeMove = 4096,
         Timeout = 8192,
         Limit = 16384,
-        Driver = 32768
+        Driver = 32768,
+        Configuration = 65536
     }
 }

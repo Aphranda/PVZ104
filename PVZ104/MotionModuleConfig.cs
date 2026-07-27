@@ -172,6 +172,19 @@ namespace PVZ104
             {
                 LinearCompensationParameters.Validate(axisIndex, MotorBaseConfigure.Scale.Value);
             }
+
+            if (TriggerParameters == null)
+            {
+                throw new InvalidOperationException(GetAxisName(axisIndex) + " 缺少 trigger_parameters。");
+            }
+
+            TriggerParameters.Validate(axisIndex);
+
+            CompensationParametersConfigure compensation = GetFullStrokeDiscreteCompensationParameters();
+            if (compensation != null)
+            {
+                compensation.Validate(axisIndex);
+            }
         }
 
         public double GetEffectiveScale(int axisIndex)
@@ -215,6 +228,45 @@ namespace PVZ104
         [DataMember(Name = "neg_lmt_down")]
         public bool? NegLmtDown { get; set; }
 
+        [DataMember(Name = "pos_lmt_enable", EmitDefaultValue = false)]
+        public short? PosLmtEnable { get; set; }
+
+        [DataMember(Name = "neg_lmt_enable", EmitDefaultValue = false)]
+        public short? NegLmtEnable { get; set; }
+
+        [DataMember(Name = "step_inv", EmitDefaultValue = false)]
+        public short? StepInv { get; set; }
+
+        [DataMember(Name = "step_mode", EmitDefaultValue = false)]
+        public short? StepMode { get; set; }
+
+        [DataMember(Name = "alarm_enable", EmitDefaultValue = false)]
+        public short? AlarmEnable { get; set; }
+
+        [DataMember(Name = "alarm_level", EmitDefaultValue = false)]
+        public short? AlarmLevel { get; set; }
+
+        [DataMember(Name = "soft_lmt_enable", EmitDefaultValue = false)]
+        public short? SoftLmtEnable { get; set; }
+
+        [DataMember(Name = "soft_lmt_pos", EmitDefaultValue = false)]
+        public double? SoftLmtPos { get; set; }
+
+        [DataMember(Name = "soft_lmt_neg", EmitDefaultValue = false)]
+        public double? SoftLmtNeg { get; set; }
+
+        [DataMember(Name = "estop_dec", EmitDefaultValue = false)]
+        public double? EstopDec { get; set; }
+
+        [DataMember(Name = "max_vel", EmitDefaultValue = false)]
+        public double? MaxVel { get; set; }
+
+        [DataMember(Name = "max_acc", EmitDefaultValue = false)]
+        public double? MaxAcc { get; set; }
+
+        [DataMember(Name = "pos_err", EmitDefaultValue = false)]
+        public int? PosErr { get; set; }
+
         public void Validate(int axisIndex)
         {
             if (!Scale.HasValue || Scale.Value <= 0)
@@ -242,9 +294,53 @@ namespace PVZ104
                 throw new InvalidOperationException("axis" + (axisIndex + 1) + " encoder 缺失。");
             }
 
+            if (!PosLmtEnable.HasValue || !NegLmtEnable.HasValue || !SoftLmtEnable.HasValue)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " 限位启用配置缺失。");
+            }
+
             if (!PosLmtDown.HasValue || !NegLmtDown.HasValue)
             {
                 throw new InvalidOperationException("axis" + (axisIndex + 1) + " 限位电平配置缺失。");
+            }
+
+            ValidateBinary(PosLmtEnable, axisIndex, "pos_lmt_enable");
+            ValidateBinary(NegLmtEnable, axisIndex, "neg_lmt_enable");
+            ValidateBinary(StepInv, axisIndex, "step_inv");
+            ValidateBinary(StepMode, axisIndex, "step_mode");
+            ValidateBinary(AlarmEnable, axisIndex, "alarm_enable");
+            ValidateBinary(AlarmLevel, axisIndex, "alarm_level");
+            ValidateBinary(SoftLmtEnable, axisIndex, "soft_lmt_enable");
+
+            if ((SoftLmtPos.HasValue && !SoftLmtNeg.HasValue) ||
+                (!SoftLmtPos.HasValue && SoftLmtNeg.HasValue))
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " soft_lmt_pos 和 soft_lmt_neg 必须同时配置。");
+            }
+
+            if (SoftLmtPos.HasValue && SoftLmtPos.Value <= SoftLmtNeg.Value)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " soft_lmt_pos 必须大于 soft_lmt_neg。");
+            }
+
+            if ((EstopDec.HasValue && EstopDec.Value <= 0) ||
+                (MaxVel.HasValue && MaxVel.Value <= 0) ||
+                (MaxAcc.HasValue && MaxAcc.Value <= 0))
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " estop_dec/max_vel/max_acc 必须大于 0。");
+            }
+
+            if (PosErr.HasValue && PosErr.Value < 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " pos_err 不能为负数。");
+            }
+        }
+
+        private static void ValidateBinary(short? value, int axisIndex, string name)
+        {
+            if (value.HasValue && value.Value != 0 && value.Value != 1)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " " + name + " 只能为 0 或 1。");
             }
         }
     }
@@ -413,6 +509,35 @@ namespace PVZ104
 
         [DataMember(Name = "minIntervalTime")]
         public int? MinIntervalTime { get; set; }
+
+        public void Validate(int axisIndex)
+        {
+            if (!OutputChn.HasValue ||
+                !OutputType.HasValue ||
+                !ChnType.HasValue ||
+                !Dir1No.HasValue ||
+                !Dir2No.HasValue ||
+                !PosSrc.HasValue ||
+                !StLevel.HasValue ||
+                !ErrZone.HasValue ||
+                !DirectOutZone.HasValue ||
+                !VibrateRange.HasValue ||
+                !GateTime.HasValue ||
+                !MinIntervalTime.HasValue)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " trigger_parameters 字段不完整。");
+            }
+
+            if (OutputChn.Value < 0 ||
+                ErrZone.Value < 0 ||
+                DirectOutZone.Value < 0 ||
+                VibrateRange.Value < 0 ||
+                GateTime.Value < 0 ||
+                MinIntervalTime.Value < 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " trigger_parameters 存在非法负数。");
+            }
+        }
     }
 
     [DataContract]
@@ -432,6 +557,67 @@ namespace PVZ104
 
         [DataMember(Name = "nCmpPos")]
         public short[] NCmpPos { get; set; }
+
+        public void Validate(int axisIndex)
+        {
+            if (!Num.HasValue || !StartPos.HasValue || !CmpLen.HasValue)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " discrete_compensation_parameters 字段不完整。");
+            }
+
+            if (Num.Value < 2 || Num.Value > 360)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " discrete_compensation_parameters num 必须在 2 到 360 之间。");
+            }
+
+            if (CmpLen.Value <= 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " discrete_compensation_parameters cmpLen 必须大于 0。");
+            }
+
+            ValidateArray(axisIndex, "pCmpPos", PCmpPos, Num.Value);
+            ValidateArray(axisIndex, "nCmpPos", NCmpPos, Num.Value);
+        }
+
+        public short[] GetPositiveCompensationArray()
+        {
+            return ExpandArray(PCmpPos, Num.Value);
+        }
+
+        public short[] GetNegativeCompensationArray()
+        {
+            return ExpandArray(NCmpPos, Num.Value);
+        }
+
+        private static void ValidateArray(int axisIndex, string fieldName, short[] values, int num)
+        {
+            if (values == null || values.Length == 0)
+            {
+                throw new InvalidOperationException("axis" + (axisIndex + 1) + " discrete_compensation_parameters " + fieldName + " 不能为空。");
+            }
+
+            if (values.Length != 1 && values.Length != num)
+            {
+                throw new InvalidOperationException(
+                    "axis" + (axisIndex + 1) + " discrete_compensation_parameters " + fieldName + " 长度必须为 1 或 num。");
+            }
+        }
+
+        private static short[] ExpandArray(short[] values, int num)
+        {
+            if (values.Length == num)
+            {
+                return values;
+            }
+
+            short[] expanded = new short[num];
+            for (int i = 0; i < expanded.Length; i++)
+            {
+                expanded[i] = values[0];
+            }
+
+            return expanded;
+        }
     }
 
     [DataContract]

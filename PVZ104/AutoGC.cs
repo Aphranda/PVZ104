@@ -51,8 +51,12 @@ namespace PVZ104
         public E_Result Connect(byte[] ipv4);
         // 最近一次连接诊断
         public MotionConnectionDiagnostic LastConnectionDiagnostic { get; }
-        // 最近一次连接诊断文本
-        public string LastConnectionMessage { get; }
+        // 查询 MotionModule.json 中可用配置。
+        public E_Result GetConfigs(out string[] itemNumbers);
+        // 应用指定配置，必须在连接和初始化前调用。
+        public E_Result ApplyConfig(string itemNumber);
+        // 查询当前实际生效配置。
+        public E_Result GetActiveConfig(out string itemNumber);
         // 转动断开
         public E_Result Disconnect();
         // 查询转动状态
@@ -68,7 +72,7 @@ namespace PVZ104
         // 电机移动
         public E_Result MoveAbsolute(Dimension dimension, double speed, double position, int timeout = -1);
 
-        // 电机JOG
+        // 电机JOG；兼容旧接口：direction=false 为正向/顺时针，true 为负向/逆时针。
         public E_Result Jog(Dimension dimension, double speed, bool direction, int timeout = -1);
 
         // 连续触发
@@ -97,6 +101,8 @@ namespace PVZ104
         private const int PollIntervalMs = 100;
         private const int StartGraceMs = 500;
         private const int DefaultMoveTimeoutMs = 60000;
+        private const int ServoPowerOffDelayMs = 2000;
+        private const int ServoPowerOnSettleDelayMs = 3000;
 
         MotionControl motionControl = new MotionControl();
         public byte[] ipv4 = new byte[4];
@@ -113,9 +119,61 @@ namespace PVZ104
 
         public string LastConnectionMessage => motionControl.LastConnectionDiagnostic.ToString();
 
+        public string LastInitializationMessage => motionControl.LastInitializationMessage;
+
         public string[] GetAvailableProjectItemNumbers()
         {
             return motionControl.GetAvailableProjectItemNumbers();
+        }
+
+        public E_Result GetConfigs(out string[] itemNumbers)
+        {
+            itemNumbers = Array.Empty<string>();
+            try
+            {
+                itemNumbers = motionControl.GetAvailableProjectItemNumbers();
+                return E_Result.E_SUCCESS;
+            }
+            catch
+            {
+                return E_Result.E_FAILED;
+            }
+        }
+
+        public E_Result ApplyConfig(string itemNumber)
+        {
+            if (string.IsNullOrWhiteSpace(itemNumber))
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+
+            try
+            {
+                motionControl.ProjectItemNumber = itemNumber;
+                return E_Result.E_SUCCESS;
+            }
+            catch (ArgumentException)
+            {
+                return E_Result.E_INVALID_ARGUMENT;
+            }
+            catch (InvalidOperationException)
+            {
+                return E_Result.E_FAILED;
+            }
+        }
+
+        public E_Result GetActiveConfig(out string itemNumber)
+        {
+            itemNumber = string.Empty;
+            try
+            {
+                itemNumber = motionControl.ActiveProjectItemNumber;
+                return E_Result.E_SUCCESS;
+            }
+            catch
+            {
+                return E_Result.E_FAILED;
+            }
         }
 
         /// <summary>
@@ -178,7 +236,7 @@ namespace PVZ104
                     return result;
                 }
 
-                SpinWait.SpinUntil(() => false, 2000);
+                SpinWait.SpinUntil(() => false, ServoPowerOffDelayMs);
 
                 result = motionControl.MotorIOControl(true, 0);
                 if (result != E_Result.E_SUCCESS)
@@ -193,9 +251,15 @@ namespace PVZ104
                 }
 
                 int resetDelay = servoResetTimeDelay > int.MaxValue ? int.MaxValue : (int)servoResetTimeDelay;
-                SpinWait.SpinUntil(() => false, Math.Max(0, resetDelay - 2000));
+                SpinWait.SpinUntil(() => false, Math.Max(ServoPowerOnSettleDelayMs, resetDelay - ServoPowerOffDelayMs));
 
                 result = motionControl.CardInitial();
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                result = motionControl.ClearError(dimension);
                 if (result != E_Result.E_SUCCESS)
                 {
                     return result;
@@ -212,6 +276,15 @@ namespace PVZ104
                 }
 
                 result = motionControl.MotorIOControl(true, 1);
+                if (result != E_Result.E_SUCCESS)
+                {
+                    return result;
+                }
+
+                int startupDelay = servoResetTimeDelay > int.MaxValue ? int.MaxValue : (int)servoResetTimeDelay;
+                SpinWait.SpinUntil(() => false, Math.Max(ServoPowerOnSettleDelayMs, startupDelay));
+
+                result = motionControl.ClearError(dimension);
                 if (result != E_Result.E_SUCCESS)
                 {
                     return result;
@@ -283,6 +356,11 @@ namespace PVZ104
             E_Result result = motionControl.TryMotorGetStatus(dimension, out Axis axis);
             speed = axis.CurrentVel;
             return result;
+        }
+
+        public E_Result GetHomeStatus(Dimension dimension, out short homeStatus)
+        {
+            return motionControl.TryMotorHomeStatus(dimension, out homeStatus);
         }
 
         /// <summary>
@@ -386,7 +464,7 @@ namespace PVZ104
         /// </summary>
         /// <param name="dimension">维度</param>
         /// <param name="speed">速度</param>
-        /// <param name="direction">方向</param>
+        /// <param name="direction">兼容旧接口：false 为正向/顺时针，true 为负向/逆时针。</param>
         /// <param name="timeout">超时时间</param>
         /// <returns></returns>
         public E_Result Jog(Dimension dimension, double speed, bool direction, int timeout = -1)
@@ -624,16 +702,11 @@ namespace PVZ104
                 }
             }
 
-            for (int i = 0; i < dimensions.Length; i++)
+            E_Result startResult = motionControl.MotorAbsolutePack8(dimensions, speed, position);
+            if (startResult != E_Result.E_SUCCESS)
             {
-                E_Result result = motionControl.MotorAbsolute(dimensions[i], speed[i], position[i]);
-                if (result != E_Result.E_SUCCESS)
-                {
-                    StopStartedAxes(dimensions, i, isHome: false);
-                    return result;
-                }
-
-                Thread.Sleep(100);
+                motionControl.MotorStopMulti(dimensions);
+                return startResult;
             }
 
             for (int i = 0; i < dimensions.Length; i++)
@@ -878,6 +951,15 @@ namespace PVZ104
 
         private void StopStartedAxes(Dimension[] dimensions, int startedCount, bool isHome)
         {
+            if (!isHome && startedCount > 1)
+            {
+                Dimension[] startedDimensions = dimensions.Take(startedCount).ToArray();
+                if (motionControl.MotorStopMulti(startedDimensions) == E_Result.E_SUCCESS)
+                {
+                    return;
+                }
+            }
+
             for (int i = 0; i < startedCount; i++)
             {
                 if (isHome)

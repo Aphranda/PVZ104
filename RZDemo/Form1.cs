@@ -37,6 +37,7 @@ namespace RZDemo
         readonly AutoGCApi AutoGC = new AutoGCApi();
         bool Test_flag = true;
         bool connect_flag = false;
+        bool statusLoopRunning = false;
         Dimension dimension = Dimension.Axis01;
 
         private delegate void MovingDelegate();
@@ -44,6 +45,23 @@ namespace RZDemo
         private delegate void ConnectDelegate();
 
         public delegate void SetControlValue(long value);
+
+        private void AppendTopMessage(string message)
+        {
+            if (TopMessage.InvokeRequired)
+            {
+                TopMessage.Invoke(new MovingDelegate(() => TopMessage.AppendText(message)));
+                return;
+            }
+
+            TopMessage.AppendText(message);
+        }
+
+        private void LogException(string action, Exception ex)
+        {
+            Debug.WriteLine(action + " Error: " + ex);
+            AppendTopMessage(action + " Error: " + ex.GetType().Name + ": " + ex.Message + "\n");
+        }
 
 
  
@@ -83,8 +101,7 @@ namespace RZDemo
             }
             catch (Exception ex)
             {
-
-                TopMessage.AppendText($"Connect Error: {ex.GetType().Name}: {ex.Message}\n");
+                LogException("Connect", ex);
             }
 
         }
@@ -118,9 +135,9 @@ namespace RZDemo
                 AutoGC.Init(dimension, true, timeDalay * 1000);
                 TopMessage.AppendText("Servo Init\n");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                TopMessage.AppendText("Servo Error\n");
+                LogException("Servo", ex);
             }
         }
 
@@ -142,10 +159,9 @@ namespace RZDemo
                     btn_signal.BackColor = Color.DarkGreen;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                TopMessage.AppendText("Disconnect Error\n");
+                LogException("Disconnect", ex);
             }
         }
 
@@ -171,11 +187,11 @@ namespace RZDemo
                         }));
 
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         Invoke(new MovingDelegate(() =>
                         {
-                            TopMessage.AppendText("Home Error\n");
+                            LogException("Home", ex);
                         }));
                     }
                 });
@@ -205,11 +221,11 @@ namespace RZDemo
                         }));
 
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         Invoke(new MovingDelegate(() =>
                         {
-                            TopMessage.AppendText("Reset Error\n");
+                            LogException("Reset", ex);
                         }));
 
                     }
@@ -239,11 +255,11 @@ namespace RZDemo
                             TopMessage.AppendText("相对定位完成\n");
                         }));
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         Invoke(new MovingDelegate(() =>
                         {
-                            TopMessage.AppendText("Relative Error\n");
+                            LogException("Relative", ex);
                         }));
                     }
                 });
@@ -268,18 +284,18 @@ namespace RZDemo
                         int timeout = int.Parse(textBox_absTime.Text);
                         data = AutoGC.MoveAbsolute(dimension, speed, position, timeout);
 
-                        TopMessage.AppendText(data.ToString());
                         Invoke(new MovingDelegate(() =>
                         {
+                            TopMessage.AppendText(data.ToString());
                             TopMessage.AppendText("绝对定位完成\n");
                         }));
 
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         Invoke(new MovingDelegate(() =>
                         {
-                            TopMessage.AppendText("Absolute Error\n");
+                            LogException("Absolute", ex);
                         }));
                     }
                 });
@@ -307,10 +323,9 @@ namespace RZDemo
                 AutoGC.Jog(dimension, speed, direction_flag, timeout);
                 TopMessage.AppendText(direction + "JOG\n");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                TopMessage.AppendText("JOG Error\n");
+                LogException("JOG", ex);
             }
         }
 
@@ -320,10 +335,9 @@ namespace RZDemo
             {
                 AutoGC.Stop(dimension);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                TopMessage.AppendText("Stop Error\n");
+                LogException("Stop", ex);
             }
         }
 
@@ -333,10 +347,9 @@ namespace RZDemo
             {
                 AutoGC.Stop(dimension);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                TopMessage.AppendText("Stop Error\n");
+                LogException("Stop", ex);
             }
 
         }
@@ -344,17 +357,17 @@ namespace RZDemo
         private delegate void AddDateDelegate(double[] item);
         private async void Getps(Dimension dimension)
         {
-            await Task.Run(() =>
+            if (statusLoopRunning)
             {
-                double position = 0;
-                double speed = 0;
-                int alarmId;
-                E_Turntable_Status status;
-                while (connect_flag)
+                return;
+            }
+
+            statusLoopRunning = true;
+            try
+            {
+                while (connect_flag && !IsDisposed)
                 {
-                    AutoGC.GetPosition(dimension, out position);
-                    AutoGC.GetSpeed(dimension, out speed);
-                    AutoGC.GetStatus(dimension, out status, out alarmId);
+                    StatusSnapshot snapshot = await Task.Run(() => ReadStatusSnapshot(dimension));
 
                     byte[] ipv4 = AutoGC.ipv4;
                     string ipv4Show = "";
@@ -363,35 +376,55 @@ namespace RZDemo
                         ipv4Show = ipv4Show + "." + item.ToString();
                     }
 
-
-                    double[] data = new double[2] { position, speed };
-                    Invoke(new AddDateDelegate((item) =>
+                    textBox_staticPos.Text = snapshot.Position.ToString();
+                    textBox_staticSpeed.Text = snapshot.Speed.ToString();
+                    textBox_status.Text = snapshot.Status.ToString() + " [" + snapshot.AlarmId.ToString() + "] ";
+                    textBox_ip.Text = ipv4Show.Length > 0 ? ipv4Show.Substring(1) : "";
+                    if (snapshot.Status == E_Turntable_Status.alarm)
                     {
-                        textBox_staticPos.Text = data[0].ToString();
-                        textBox_staticSpeed.Text = data[1].ToString();
-                        textBox_status.Text = status.ToString() + " [" + alarmId.ToString() + "] ";
-                        textBox_ip.Text = ipv4Show.Substring(1);
-                        if (status == E_Turntable_Status.alarm)
-                        {
-                            textBox_status.BackColor = Color.Coral;
+                        textBox_status.BackColor = Color.Coral;
 
-                        }
-                        else
-                        {
-                            textBox_status.BackColor = Color.LightGreen;
+                    }
+                    else
+                    {
+                        textBox_status.BackColor = Color.LightGreen;
 
-                        }
-                        if (alarmId == 128 && status == E_Turntable_Status.alarm)
-                        {
-                            btn_signal.Text = "Disconnect";
-                            btn_signal.BackColor = Color.DarkRed;
-                            connect_flag = false;
-                        }
-                        panel5.Enabled = connect_flag;
-                    }), data);
-                    System.Threading.Thread.Sleep(100);
+                    }
+                    if (snapshot.AlarmId == 128 && snapshot.Status == E_Turntable_Status.alarm)
+                    {
+                        btn_signal.Text = "Disconnect";
+                        btn_signal.BackColor = Color.DarkRed;
+                        connect_flag = false;
+                    }
+                    panel5.Enabled = connect_flag;
+                    await Task.Delay(100);
                 }
-            });
+            }
+            catch (Exception ex)
+            {
+                LogException("Status", ex);
+            }
+            finally
+            {
+                statusLoopRunning = false;
+            }
+        }
+
+        private StatusSnapshot ReadStatusSnapshot(Dimension dimension)
+        {
+            StatusSnapshot snapshot = new StatusSnapshot();
+            AutoGC.GetPosition(dimension, out snapshot.Position);
+            AutoGC.GetSpeed(dimension, out snapshot.Speed);
+            AutoGC.GetStatus(dimension, out snapshot.Status, out snapshot.AlarmId);
+            return snapshot;
+        }
+
+        private struct StatusSnapshot
+        {
+            public double Position;
+            public double Speed;
+            public E_Turntable_Status Status;
+            public int AlarmId;
         }
 
         /// <summary>
@@ -461,12 +494,12 @@ namespace RZDemo
                                 textBox_numNow.Text = numFlag.ToString();
                             }));
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
                             Invoke(new MovingDelegate(() =>
                             {
                                 panel2.Enabled = true;
-                                TopMessage.AppendText("Step Error\n");
+                                LogException("Step", ex);
                             }));
                             connect_flag = false;
                             break;
@@ -509,18 +542,34 @@ namespace RZDemo
 
         private void button_TriggerStart_Click(object sender, EventArgs e)
         {
-            double trigerStart = double.Parse(textBox_TriggerStart.Text);
-            double trigerStop = double.Parse(textBox_TriggerStop.Text);
-            double triggerStep = double.Parse(textBox_TriggerStep.Text);
-            int triggerWidth = int.Parse(textBox_TriggerWidth.Text);
-            Dimension dimension = DimensionSelect();
-            AutoGC.Trigger(dimension, trigerStart, trigerStop, triggerStep, triggerWidth);
+            try
+            {
+                double trigerStart = double.Parse(textBox_TriggerStart.Text);
+                double trigerStop = double.Parse(textBox_TriggerStop.Text);
+                double triggerStep = double.Parse(textBox_TriggerStep.Text);
+                int triggerWidth = int.Parse(textBox_TriggerWidth.Text);
+                Dimension dimension = DimensionSelect();
+                E_Result result = AutoGC.Trigger(dimension, trigerStart, trigerStop, triggerStep, triggerWidth);
+                TopMessage.AppendText("Trigger Start: " + result + "\n");
+            }
+            catch (Exception ex)
+            {
+                LogException("Trigger Start", ex);
+            }
         }
 
         private void button_TriggerStop_Click(object sender, EventArgs e)
         {
-            Dimension dimension = DimensionSelect();
-            AutoGC.TriggerStop(dimension);
+            try
+            {
+                Dimension dimension = DimensionSelect();
+                E_Result result = AutoGC.TriggerStop(dimension);
+                TopMessage.AppendText("Trigger Stop: " + result + "\n");
+            }
+            catch (Exception ex)
+            {
+                LogException("Trigger Stop", ex);
+            }
         }
 
         private Dimension DimensionSelect()
@@ -561,7 +610,16 @@ namespace RZDemo
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            System.Diagnostics.Process.GetCurrentProcess().Kill();
+            connect_flag = false;
+            Test_flag = false;
+            try
+            {
+                AutoGC.Disconnect();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Disconnect on closing failed: " + ex);
+            }
         }
 
         /// <summary>

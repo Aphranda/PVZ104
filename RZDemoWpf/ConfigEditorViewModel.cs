@@ -19,6 +19,7 @@ namespace RZDemoWpf
         private MotionModuleConfigRoot root;
         private string selectedProjectItemNumber;
         private string selectedAxis;
+        private bool suppressSelectionCapture;
         private string newProjectItemNumber = "";
         private string statusText = "等待编辑";
         private Brush statusBrush = Brushes.DimGray;
@@ -102,6 +103,17 @@ namespace RZDemoWpf
             get => selectedProjectItemNumber;
             set
             {
+                if (string.Equals(selectedProjectItemNumber, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (!TryCaptureCurrentAxisValues())
+                {
+                    OnPropertyChanged(nameof(SelectedProjectItemNumber));
+                    return;
+                }
+
                 if (SetProperty(ref selectedProjectItemNumber, value))
                 {
                     RefreshAxisItems(null);
@@ -115,6 +127,17 @@ namespace RZDemoWpf
             get => selectedAxis;
             set
             {
+                if (string.Equals(selectedAxis, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (!TryCaptureCurrentAxisValues())
+                {
+                    OnPropertyChanged(nameof(SelectedAxis));
+                    return;
+                }
+
                 if (SetProperty(ref selectedAxis, value))
                 {
                     LoadSelectedAxisValues();
@@ -220,10 +243,19 @@ namespace RZDemoWpf
 
                 string selectedProject = ProjectItems.FirstOrDefault(
                     item => string.Equals(item, preferredProjectItemNumber, StringComparison.OrdinalIgnoreCase)) ?? ProjectItems.FirstOrDefault();
-                selectedProjectItemNumber = selectedProject;
-                OnPropertyChanged(nameof(SelectedProjectItemNumber));
-                RefreshAxisItems(preferredAxis);
-                LoadSelectedAxisValues();
+                suppressSelectionCapture = true;
+                try
+                {
+                    selectedProjectItemNumber = selectedProject;
+                    OnPropertyChanged(nameof(SelectedProjectItemNumber));
+                    RefreshAxisItems(preferredAxis);
+                    LoadSelectedAxisValues();
+                }
+                finally
+                {
+                    suppressSelectionCapture = false;
+                }
+
                 SetSuccess("配置已加载");
             }
             catch (Exception ex)
@@ -389,14 +421,13 @@ namespace RZDemoWpf
                 throw new InvalidDataException("未选择有效轴配置。");
             }
 
-            axis.MotorBaseConfigure = new MotorBaseConfigure
-            {
-                Scale = ParseDouble(BaseScaleText, "scale"),
-                Smooth = ParseDouble(BaseSmoothText, "smooth"),
-                Encoder = ParseShort(EncoderText, "encoder"),
-                PosLmtDown = PosLmtDown,
-                NegLmtDown = NegLmtDown
-            };
+            MotorBaseConfigure motorBase = axis.MotorBaseConfigure ?? new MotorBaseConfigure();
+            motorBase.Scale = ParseDouble(BaseScaleText, "scale");
+            motorBase.Smooth = ParseDouble(BaseSmoothText, "smooth");
+            motorBase.Encoder = ParseShort(EncoderText, "encoder");
+            motorBase.PosLmtDown = PosLmtDown;
+            motorBase.NegLmtDown = NegLmtDown;
+            axis.MotorBaseConfigure = motorBase;
 
             axis.HomeParameters = new HomeParametersConfigure
             {
@@ -466,6 +497,28 @@ namespace RZDemoWpf
             axis.CompensationParameters = null;
 
             axis.Validate(GetSelectedAxisIndex());
+        }
+
+        private bool TryCaptureCurrentAxisValues()
+        {
+            if (suppressSelectionCapture ||
+                root == null ||
+                string.IsNullOrWhiteSpace(selectedProjectItemNumber) ||
+                string.IsNullOrWhiteSpace(selectedAxis))
+            {
+                return true;
+            }
+
+            try
+            {
+                ApplyCurrentAxisValues();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                SetFailure("当前编辑无效，已停留在当前配置：" + ex.Message);
+                return false;
+            }
         }
 
         private void SaveRoot()

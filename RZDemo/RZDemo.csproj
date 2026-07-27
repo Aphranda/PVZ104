@@ -93,7 +93,7 @@
     </None>
     <Content Include="..\PVZ104\MotionModule.json">
       <Link>MotionModule.json</Link>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

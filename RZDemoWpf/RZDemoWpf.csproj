@@ -48,7 +48,7 @@
   <ItemGroup>
     <Content Include="..\PVZ104\MotionModule.json">
       <Link>MotionModule.json</Link>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
